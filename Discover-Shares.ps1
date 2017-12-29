@@ -58,7 +58,7 @@ Function Discover-Shares {
     $Output = @()
     $FailServers = @()
 
-    $Servers | % {
+    $Servers | ForEach-Object {
         $Server = $_.Name
 
         $Fail = $False
@@ -95,7 +95,7 @@ Function Discover-Shares {
         }
 
         If ($WMI){
-            $WMI | % {
+            $WMI | ForEach-Object {
                 $OutputObj = New-Object -TypeName PSObject
                 $OutputObj | Add-Member -MemberType NoteProperty -Name 'Server' -Value $Server
                 $OutputObj | Add-Member -MemberType NoteProperty -Name 'Share' -Value $_.Name

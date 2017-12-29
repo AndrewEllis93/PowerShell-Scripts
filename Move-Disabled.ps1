@@ -336,7 +336,7 @@ Function Start-Logging{
 
     #Purges log files older than X days
     $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
-    Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate } | Remove-Item -Force
+    Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -like "*.log"} | Remove-Item -Force
 } 
 
 #Start logging

@@ -42,7 +42,8 @@ Function Enumerate-Access {
         [boolean]$IncludeInherited=$False
     )
 
-    If ($Path -like "*\"){Throw "Path cannot have a trailing slash."}
+    #Remove the trailing slash if present. 
+    If ($Path -like "*\"){$Path = $Path.substring(0,($Path.Length-1))}
     If (!(Test-Path $Path)){Throw "Path was not reachable."}
 
     If ($Depth){$Tree = Get-Childitem $Path -recurse -Depth $Depth -Directory}

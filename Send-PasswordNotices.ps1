@@ -48,7 +48,7 @@ Function Start-Logging{
 
     #Purges log files older than X days
     $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
-    Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate } | Remove-Item -Force
+    Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate  -and $_.Name -like "*.log"} | Remove-Item -Force
 } 
 # send-notice - sends emails to users based on days before password expiration.  Requires user email address, days before password expiration, password
 #   password expiration date, and user account name variables.
@@ -105,12 +105,11 @@ function send-notice
     $smtpserver = "server.domain.local"
     $mailfrom = "noreply@email.com"
     $ADGroupExclusion = "AD group"
-    $LogDir = "C:\Log\SendPasswordNotices"
 
 #-----------------------------------
 #Call to start logging function
 #-----------------------------------
-Start-Logging -logdirectory $LogDir -logname "SendPasswordNotices" -LogRetentionDays 30
+Start-Logging -logdirectory "C:\ScriptLogs\SendPasswordNotices" -logname "SendPasswordNotices" -LogRetentionDays 30
 
 #-----------------------------------
 # Main process.  Collects user accounts, calculates password expiration dates and passes the value along with user information to the send-notice function.
@@ -119,7 +118,7 @@ $ServiceAccounts = Get-ADGroupMember -Identity $ADGroupExclusion
 $Users = get-aduser -filter {(enabled -eq $true -and passwordneverexpires -eq $false)} -properties samaccountname, name, mail, msDS-UserPasswordExpiryTimeComputed | select samaccountname, name, mail, msDS-UserPasswordExpiryTimeComputed
 
 #Filter users
-$Users = $Users | Where {`
+$Users = $Users | Where-Object {`
     $_.'msDS-UserPasswordExpiryTimeComputed'`
     -and $_.Mail -and $_.SamAccountName `
     -and $ServiceAccounts.SamAccountName -notcontains $_.SamAccountName} | `
