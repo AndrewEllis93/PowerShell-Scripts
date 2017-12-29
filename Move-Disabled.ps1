@@ -10,9 +10,29 @@
 #
 # WARNING: THIS SCRIPT WILL OVERWRITE EXTENSIONATTRIBUTE3, MAKE SURE YOU ARE NOT USING IT FOR ANYTHING ELSE
 #
-# Make sure you create the OU structure as detailed in the "declarations" section. This script will not create the OUs for you.
+# This script will not create the OUs for you.
+# CREATE AN OU STRUCTURE UNDER YOUR PARENT OU AS FOLLOWS:
+#
+# Parent OU (specified by user)
+# -> Users
+# --> 0-30 Days
+# --> 30-180 Days
+# --> Over 180 Days
+#
+# -> Computers
+# --> 0-30 Days
+# --> 30-180 Days
+# --> Over 180 Days
 #
 ####################################################
+
+#DECLARATIONS
+    #Declares misc variables. 
+    $LogDirectory = "C:\Logs\Disable-InactiveADAccountsLog" #No trailing slash
+    $LogName = "Disable-InactiveADAccountsLog"
+    $MovedUsers = 0 #Leave at 0.
+    $MovedComputers = 0 #Leave at 0.
+    $ParentOU = "OU=Disabled Objects,DC=domain,DC=local"
 
 #LOGGING FUNCTION - starts transcript and cleans logs older than specified retention date.
 Function Start-Logging{
@@ -53,28 +73,6 @@ Function Start-Logging{
     $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
     Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate } | Remove-Item -Force
 } 
-
-#DECLARATIONS
-    #Declares misc variables. 
-    $LogDirectory = "C:\Logs\Disable-InactiveADAccountsLog" #No trailing slash
-    $LogName = "Disable-InactiveADAccountsLog"
-    $MovedUsers = 0 #Leave at 0.
-    $MovedComputers = 0 #Leave at 0.
-
-    $ParentOU = "OU=Disabled Objects,DC=domain,DC=local"
-
-    #CREATE AN OU STRUCTURE UNDER YOUR PARENT OU AS FOLLOWS:
-    #
-    # Parent OU (specified above)
-    # -> Users
-    # --> 0-30 Days
-    # --> 30-180 Days
-    # --> Over 180 Days
-    #
-    # -> Computers
-    # --> 0-30 Days
-    # --> 30-180 Days
-    # --> Over 180 Days
 
 #START LOGGING
 Start-Logging -logdirectory $LogDirectory -logname $LogName -LogRetentionDays 30
