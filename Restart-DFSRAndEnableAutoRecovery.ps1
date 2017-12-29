@@ -11,7 +11,23 @@
 ####################################################
 
 Function Restart-DFSRAndEnableAutoRecovery {
- #Gets all DCs, restarts the DFSR service, and enables DFSR auto recovery, which is turned off by default for who knows what reason. 
+    <#
+    .SYNOPSIS
+    Gets all DCs, restarts the DFSR service, and enables DFSR auto recovery, which is turned off by default for who knows what reason. 
+    
+    .DESCRIPTION
+    
+    .EXAMPLE
+    Restart-DFSRAndEnableAutoRecovery
+    
+    .NOTES
+    Title: Restart-DFSRAndEnableAutoRecovery
+    Date Created : 2017-12-28
+    Last Edit: 2017-12-29
+    Author : Andrew Ellis
+    GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+    #>
+
     Write-Output "Getting list of DCs..."
     $DCs = Get-ADGroupMember 'Domain Controllers' -ErrorAction Stop
 
@@ -29,7 +45,7 @@ Function Start-Logging{
         [Parameter(Mandatory=$true)][String]$LogDirectory,
         [Parameter(Mandatory=$true)][String]$LogName,
         [Parameter(Mandatory=$true)][Int]$LogRetentionDays
-        )
+    )
 
     #Sets screen buffer from 120 width to 500 width. This stops truncation in the log.
     $ErrorActionPreference = 'SilentlyContinue'

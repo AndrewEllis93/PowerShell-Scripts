@@ -7,14 +7,10 @@
 # GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
 #
 # This sends password expiration notice emails to users at 1,2,3,7, and 14 days. Supports an AD exclusion group.
+# Comment out this line starting with "Send-MailMessage" to just get output without actuall sending any email.
 #
 ####################################################
 
-
-#FUNCTION DECLARATIONS
-#===================================================================================
-
-#Logging function - starts transcript and cleans logs older than specified retention date.
 Function Start-Logging{
     param (
         [Parameter(Mandatory=$true)][String]$LogDirectory,
@@ -50,11 +46,26 @@ Function Start-Logging{
     $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
     Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate  -and $_.Name -like "*.log"} | Remove-Item -Force
 } 
-# send-notice - sends emails to users based on days before password expiration.  Requires user email address, days before password expiration, password
-#   password expiration date, and user account name variables.
-#   Notices are only sent if days before password is due to expire are equal to 1,2,3,7, or 14.
-function send-notice
+
+
+Function Send-Notice
 {
+    <#
+    .SYNOPSIS
+    Customizes and sends an email message and subject based on the number of days left before password expiry.
+
+    .DESCRIPTION
+    Send-notice - sends emails to users based on days before password expiration.  Requires user email address, days before password expiration, password expiration date, and user account name variables.
+    Notices are only sent if days before password is due to expire are equal to 1,2,3,7, or 14.
+    
+    .NOTES
+    Title: Send-Notice
+    Date Created : 2017-05-01   
+    Last Edit: 2017-12-29
+    Author : Andrew Ellis
+    GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+    #>
+
     param(
         [Parameter(Mandatory=$True)][string]$usermail,
         [Parameter(Mandatory=$True)][Int]$days,
@@ -63,8 +74,6 @@ function send-notice
         [Parameter(Mandatory=$True)][string]$SMTPServer,
         [Parameter(Mandatory=$True)][string]$MailFrom
     )
-
-
 
     If (@(0,1) -contains $Days)
     {
@@ -95,40 +104,67 @@ function send-notice
     }
     Else
     {
-        Write-output ("Notice not sent to $SAM. Password expiration date: $expirationdate (in $days days)")
+        #Write-output ("Notice not sent to $SAM. Password expiration date: $expirationdate (in $days days)")
     }
 }
 
-#-----------------------------------
-#Custom variables
-#-----------------------------------
-    $smtpserver = "server.domain.local"
-    $mailfrom = "noreply@email.com"
-    $ADGroupExclusion = "AD group"
+Function Send-AllNotices {
+    <#
+    .SYNOPSIS
+    Main process.  Collects user accounts, calculates password expiration dates and passes the value along with user information to the send-notice function.
+    
+    .DESCRIPTION
+    
+    .EXAMPLE
+    Send-AllNotices -ADGroupExclusion "Test Group" -MailFrom "noreply@email.com" -smtpserver "server.domain.local"
+    
+    .NOTES
+    Title: Send-AllNotices
+    Date Created : 2017-05-01   
+    Last Edit: 2017-12-29
+    Author : Andrew Ellis
+    GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+    #>
+    
+    Param (
+        [string]$ADGroupExclusion,
+        [Parameter(Mandatory=$true)][string]$MailFrom,
+        [Parameter(Mandatory=$true)][string]$smtpserver
+    )
 
-#-----------------------------------
-#Call to start logging function
-#-----------------------------------
+    $ServiceAccounts = Get-ADGroupMember -Identity $ADGroupExclusion -ErrorAction Stop
+    $Users = Get-ADUser -Filter {(enabled -eq $true -and passwordneverexpires -eq $false)} -properties samaccountname, name, mail, msDS-UserPasswordExpiryTimeComputed -ErrorAction Stop | 
+        Select-Object samaccountname, name, mail, msDS-UserPasswordExpiryTimeComputed
+
+    #Filter users
+    If ($ADGroupExclusion){
+        $Users = $Users | Where-Object {
+            $_.'msDS-UserPasswordExpiryTimeComputed' -and
+            $_.Mail -and $_.SamAccountName -and
+            $ServiceAccounts.SamAccountName -notcontains $_.SamAccountName
+        } | Sort-Object -Property 'msDS-UserPasswordExpiryTimeComputed'
+    }
+    Else {
+        $Users = $Users | Where-Object {
+            $_.'msDS-UserPasswordExpiryTimeComputed' -and
+            $_.Mail -and $_.SamAccountName
+        } | Sort-Object -Property 'msDS-UserPasswordExpiryTimeComputed'
+    }
+
+    #Loop through users and send notices
+    $Users | foreach-object {
+        $Expirationdate = [datetime]::FromFileTime($_.'msDS-UserPasswordExpiryTimeComputed')
+        $Expirationdays = ($Expirationdate - (Get-Date)).Days
+        
+        Send-Notice -usermail $_.Mail -days $ExpirationDays -expirationdate $expirationdate -SAM $_.SamAccountName -SMTPServer $smtpserver -MailFrom $mailfrom
+    }
+}
+
+#Start logging.
 Start-Logging -logdirectory "C:\ScriptLogs\SendPasswordNotices" -logname "SendPasswordNotices" -LogRetentionDays 30
 
-#-----------------------------------
-# Main process.  Collects user accounts, calculates password expiration dates and passes the value along with user information to the send-notice function.
-#-----------------------------------
-$ServiceAccounts = Get-ADGroupMember -Identity $ADGroupExclusion
-$Users = get-aduser -filter {(enabled -eq $true -and passwordneverexpires -eq $false)} -properties samaccountname, name, mail, msDS-UserPasswordExpiryTimeComputed | select samaccountname, name, mail, msDS-UserPasswordExpiryTimeComputed
+#Start function
+Send-AllNotices -ADGroupExclusion "Test Group" -MailFrom "noreply@email.com" -smtpserver "server.domain.local"
 
-#Filter users
-$Users = $Users | Where-Object {`
-    $_.'msDS-UserPasswordExpiryTimeComputed'`
-    -and $_.Mail -and $_.SamAccountName `
-    -and $ServiceAccounts.SamAccountName -notcontains $_.SamAccountName} | `
-    Sort-Object -Property 'msDS-UserPasswordExpiryTimeComputed'
-
-#Loop through users and send notices
-$Users | foreach-object {
-    $Expirationdate = [datetime]::FromFileTime($_.'msDS-UserPasswordExpiryTimeComputed')
-    $Expirationdays = ($Expirationdate - (Get-Date)).Days
-    
-    Send-Notice -usermail $_.Mail -days $ExpirationDays -expirationdate $expirationdate -SAM $_.SamAccountName -SMTPServer $smtpserver -MailFrom $mailfrom
-}
+#Stop logging.
 Stop-Transcript
