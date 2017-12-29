@@ -120,7 +120,7 @@ $DeclareFunctions = {
             [datetime]$LastChangeTime = [System.Management.ManagementDateTimeconverter]::ToDateTime($DfsrWmiObj.LastChangeTime)
         }
         Else {
-            $OldestChangeTime = ($DfsrWmiObj.LastChangeTime | Measure -Minimum).Minimum
+            $OldestChangeTime = ($DfsrWmiObj.LastChangeTime | Measure-Object -Minimum).Minimum
             [datetime]$LastChangeTime = [System.Management.ManagementDateTimeconverter]::ToDateTime($OldestChangeTime)
         }
 

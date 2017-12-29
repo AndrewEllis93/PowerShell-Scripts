@@ -10,9 +10,6 @@
 #
 ####################################################
 
-If (!$Path){$Path = Read-Host "Enter CSV export directory (with trailing slash)"}
-If (!(Test-Path $Path)){mkdir $Path -Force | Out-Null}
-
 Function Discover-Shares {
     <#
     .SYNOPSIS
@@ -53,8 +50,8 @@ Function Discover-Shares {
     param([boolean]$FilterShares = $True,
         [string]$DomainContoller)
 
-    If (!$DomainController){$Servers = Get-ADComputer -Filter {OperatingSystem -Like "Windows Server*"} | Where {$_.Name -notlike "ENTDP*"} | Sort Name}
-    Else {$Servers = Get-ADComputer -Server $DomainContoller -Filter {OperatingSystem -Like "Windows Server*"} | Where {$_.Name -notlike "ENTDP*"} | Sort Name}
+    If (!$DomainController){$Servers = Get-ADComputer -Filter {OperatingSystem -Like "Windows Server*"} | Where-Object {$_.Name -notlike "ENTDP*"} | Sort-Object Name}
+    Else {$Servers = Get-ADComputer -Server $DomainContoller -Filter {OperatingSystem -Like "Windows Server*"} | Where-Object {$_.Name -notlike "ENTDP*"} | Sort-Object Name}
     $ServerCount = $Servers.Count
     $Iteration = 1
 
@@ -69,7 +66,7 @@ Function Discover-Shares {
 
         Try {
             if ($FilterShares){
-                $WMI = get-WmiObject -class Win32_Share -computer $_.Name -ErrorAction Stop | Where {`
+                $WMI = get-WmiObject -class Win32_Share -computer $_.Name -ErrorAction Stop | Where-Object {`
                 $_.Name -notlike "?$" -and `
                 $_.Name -notlike "*Sophos*" -and `
                 $_.Name -notlike "*SCCM*" -and `
@@ -86,7 +83,7 @@ Function Discover-Shares {
                 $_.Path -like "?:\*"}
             }
             Else {
-                $WMI = get-WmiObject -class Win32_Share -computer $_.Name -ErrorAction Stop | Where {`
+                $WMI = get-WmiObject -class Win32_Share -computer $_.Name -ErrorAction Stop | Where-Object {`
                 $_.Name -notlike "?$" -and `
                 $_.Path -like "?:\*"}
             }
@@ -132,4 +129,4 @@ Function Discover-Shares {
 }
 
 $Results = Discover-Shares -FilterShares $False
-$Results | Export-CSV ($Path + "Shares.csv") -NoTypeInformation
+$Results | Export-CSV C:\Temp\Shares.csv -NoTypeInformation
