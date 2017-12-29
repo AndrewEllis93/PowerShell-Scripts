@@ -15,7 +15,7 @@
 ####################################################
 
 #Function declarations
-Function Start-Logging{
+Function Start-Logging {
     <#
     .SYNOPSIS
     This function starts a transcript in the specified directory and cleans up any files older than the specified number of days. 
@@ -54,7 +54,7 @@ Function Start-Logging{
     $ErrorActionPreference = 'Continue'
 
     #Remove the trailing slash if present. 
-    If ($LogDirectory -like "*\"){$LogDirectory = $LogDirectory.substring(0,($LogDirectory.Length-1))
+    If ($LogDirectory -like "*\"){$LogDirectory = $LogDirectory.substring(0,($LogDirectory.Length-1))}
 
     #Create log directory if it does not exist already
     If (!(Test-Path $LogDirectory)){mkdir $LogDirectory}
@@ -103,7 +103,7 @@ Function Disable-InactiveADAccounts {
     )
 
     #Remove trailing slash if present.
-    If ($OutputDirectory -like "*\"){$OutputDirectory = $OutputDirectory.substring(0,($OutputDirectory.Length-1))
+    If ($OutputDirectory -like "*\"){$OutputDirectory = $OutputDirectory.substring(0,($OutputDirectory.Length-1))}
 
     #Declare try count at 0.
     $TryCount= 0
