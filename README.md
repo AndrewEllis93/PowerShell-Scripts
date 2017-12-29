@@ -1,9 +1,9 @@
-# PowerShell-Scripts
-**ADHealthCheck.** This one is largely based on a script by Vikas Sukhija, who is credited in the body. I really only made some minor edits to his. Mine just adds a column that shows the last replication time and only emails if there is an unhealthy status or failure to cut down on email spam.
+# PowerShell Scripts
+**ADHealthCheck:** This one is largely based on a script by Vikas Sukhija, who is credited in the body. I really only made some minor edits to his. Mine just adds a column that shows the last replication time and only emails if there is an unhealthy status or failure to cut down on email spam.
 
 **Disable-InactiveADAccounts:** Make sure you read through the comments (as with all of these scripts). It just finds the last logon for all AD accounts and disables any that have been inactive for X number of days (depending on what threshold you set). The difference with this script is that it gets the most accurate last logon available by comparing the results from all domain controllers. By default the lastlogontimestamp is only replicated every 14 days minus a random percentage of 5. This makes it much more accurate, but also it is a very slow script for reasons I can't quite figure out. But it works. It also supports an exclusion AD group that you can put things like service accounts in to prevent them from being disabled. It will also email a report to the specified email addresses.
 
-**Discover-DriveSpace** This one gets all your servers in AD and dumps the drives with sizes and remaining free space to a CSV (drivespace.csv). It also export some other files - pingable.txt, pingfail.txt, and servers.csv. Those should be self-explanatory.
+**Discover-DriveSpace:** This one gets all your servers in AD and dumps the drives with sizes and remaining free space to a CSV (drivespace.csv). It also export some other files - pingable.txt, pingfail.txt, and servers.csv. Those should be self-explanatory.
 
 **Discover-Shares:** This one is a discovery function to find all Windows shares on the domain. Useful for acquisitions.
 

@@ -36,7 +36,7 @@
     $TopLevelACL = $Path | Get-Acl
     $FullName = (Get-Item $Path).FullName
     $Index = 0
-    $TopLevelACL.Access.IdentityReference.Value | % {
+    $TopLevelACL.Access.IdentityReference.Value | ForEach-Object {
         $OutputObj = New-Object -TypeName PSObject
         $OutputObj | Add-Member -Name FullName -MemberType NoteProperty -Value $FullName
         $OutputObj | Add-Member -Name Owner -MemberType NoteProperty -Value $TopLevelACL.Owner
@@ -51,7 +51,7 @@
     }
 
     #Recursive ACL
-    $Tree | % {
+    $Tree | ForEach-Object {
 
         $FullName = $_.FullName
         $ACL = $_ | Get-ACL
@@ -59,7 +59,7 @@
         $Index = 0
 
         If ($IncludeInherited -eq $False) {
-            $ACL.Access.IdentityReference.Value | % {
+            $ACL.Access.IdentityReference.Value | ForEach-Object {
                 If ($ACL.Access.IsInherited[$Index] -eq $False){
                     $OutputObj = New-Object -TypeName PSObject
                     $OutputObj | Add-Member -Name FullName -MemberType NoteProperty -Value $FullName
@@ -76,7 +76,7 @@
             }
         }
         Else {
-            $ACL.Access.IdentityReference.Value | % {
+            $ACL.Access.IdentityReference.Value | ForEach-Object {
                 $OutputObj = New-Object -TypeName PSObject
                 $OutputObj | Add-Member -Name FullName -MemberType NoteProperty -Value $FullName
                 $OutputObj | Add-Member -Name Owner -MemberType NoteProperty -Value $ACL.Owner
