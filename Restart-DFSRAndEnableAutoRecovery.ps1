@@ -36,6 +36,7 @@ Function Restart-DFSRAndEnableAutoRecovery {
         $Output = "Restarting DFSR service on " + $DC.Name + "..."
         Write-Output $Output
         Invoke-Command -ComputerName $DC.Name -ScriptBlock {Restart-Service DFSR}
+        Start-Sleep 5
         Write-Output ("Enabling DFSR auto recovery on " + $DC.Name + "...")
         Invoke-Command -ComputerName $DC.Name -ScriptBlock {cmd.exe /c wmic /namespace:\\root\microsoftdfs path dfsrmachineconfig set StopReplicationOnAutoRecovery=FALSE}
     }

@@ -24,7 +24,7 @@ Start-Transcript -Append -Path $LogDirectory\ADHealthCheck.$Today.log | Out-Null
 
 #Purges log files older than X days
 $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
-Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate } | Remove-Item -Force
+Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -notlike "*.log*"} | Remove-Item -Force
 
 #############################################################################
 #       Author: Vikas Sukhija
