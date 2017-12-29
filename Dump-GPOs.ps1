@@ -1,4 +1,16 @@
-﻿$Dir = (Read-Host "Enter CSV export directory (with trailing slash)") + "GPOs\"
+﻿####################################################
+#
+# Title: Dump-GPOs
+# Date Created : 2017-12-28
+# Last Edit: 2017-12-29
+# Author : Andrew Ellis
+# GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+#
+# This exports all of your GPOs' HTML reports, a CSV detailing all the GPO links, and a txt list of all the GPOs.
+#
+####################################################
+
+$Dir = (Read-Host "Enter CSV export directory (with trailing slash)") + "GPOs\"
 $GPOs = get-gpo -All
 $AllGPOs = @()
 

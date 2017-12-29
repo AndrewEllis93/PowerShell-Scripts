@@ -1,12 +1,21 @@
-﻿If (!$Path){$Path = Read-Host "Enter CSV export directory (with trailing slash)"}
+﻿####################################################
+#
+# Title: Discover-Shares
+# Date Created : 2017-10-31
+# Last Edit: 2017-12-29
+# Author : Andrew Ellis
+# GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+#
+# This function discovers all Windows Servers from Active Directory and discovers their file shares using WMI.
+#
+####################################################
+
+If (!$Path){$Path = Read-Host "Enter CSV export directory (with trailing slash)"}
 If (!(Test-Path $Path)){mkdir $Path -Force | Out-Null}
 
 Function Discover-Shares {
     <#
     .SYNOPSIS
-    Written by Andrew Ellis
-    Last edit: 2017-10-31
-
     This function discovers all Windows Servers from Active Directory and discovers their file shares using WMI.
 
     .DESCRIPTION
@@ -34,6 +43,11 @@ Function Discover-Shares {
     .LINK
 
     .NOTES
+    Title: Discover-Shares
+    Date Created : 2017-10-31
+    Last Edit: 2017-12-29
+    Author : Andrew Ellis
+    GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
     #>
 
     param([boolean]$FilterShares = $True,

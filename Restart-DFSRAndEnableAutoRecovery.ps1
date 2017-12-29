@@ -1,3 +1,15 @@
+####################################################
+#
+# Title: Restart-DFSRAndEnableAutoRecovery
+# Date Created : 2017-12-28
+# Last Edit: 2017-12-29
+# Author : Andrew Ellis
+# GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+#
+# Nice and short and simple. It restarts the DFSR service on all domain controllers (I schedule this to run nightly. This isn't really necessary but I have found it to prevent some misc issues that crop up once in a blue moon) and enables DFSR auto-recovery, which for whatever reason is disabled on domain controllers by default.
+#
+####################################################
+
 #Sets screen buffer from 120 width to 500 width. This stops truncation in the log.
 $pshost = get-host
 $pswindow = $pshost.ui.rawui

@@ -1,12 +1,18 @@
-﻿###########################################################
+﻿####################################################
 #
-# AUTHOR  : PowerMonkey500
+# Title: Move-Disabled
+# Date Created : 2017-12-28
+# Last Edit: 2017-12-29
+# Author : Andrew Ellis
+# GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+#
+# This moves disabled computers too. It rounds up disabled accounts and ages them through different OUs (0-30 days, 30-180 days, over 180 days).
 #
 # WARNING: THIS SCRIPT WILL OVERWRITE EXTENSIONATTRIBUTE3, MAKE SURE YOU ARE NOT USING IT FOR ANYTHING ELSE
 #
 # Make sure you create the OU structure as detailed in the "declarations" section. This script will not create the OUs for you.
 #
-###########################################################
+####################################################
 
 #LOGGING FUNCTION - starts transcript and cleans logs older than specified retention date.
 Function Start-Logging{

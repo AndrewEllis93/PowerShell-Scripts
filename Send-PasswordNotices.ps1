@@ -1,8 +1,12 @@
 ####################################################
 #
-# Password Change Reminder Email Script
-# Date Created : 5/1/17
-# Author : PowerMonkey500
+# Title: Send-PasswordNotices
+# Date Created : 2017-05-01
+# Last Edit: 2017-12-29
+# Author : Andrew Ellis
+# GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+#
+# This sends password expiration notice emails to users at 1,2,3,7, and 14 days. Supports an AD exclusion group.
 #
 ####################################################
 

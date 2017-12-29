@@ -1,4 +1,18 @@
-﻿Function Enumerate-Access {
+﻿####################################################
+#
+# Title: Enumerate-Access
+# Date Created : 2017-12-28
+# Last Edit: 2017-12-29
+# Author : Andrew Ellis
+# GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+#
+# This function will spit back all of the permissions of a specified folder, recursively. You can choose to return inherited permissions or not. I wrote this specifically to show each and every ACL entry on a separate line. # # It's really useful for finding where a group or user is being used in NTFS ACLs. This helped us get rid of mail-enabled security groups by discovering each place that they were being used in NTFS ACLs so we could replace them. 
+# In most cases you won't want it to return inherited permissions (it doesn't by default) so you don't get a TON of redundant output, just the explicit ACL entries. 
+# It will generate a lot of disk activity on the target server because it scans the entire file system of the folder specified.
+#
+####################################################
+
+Function Enumerate-Access {
     <#
     .SYNOPSIS
     This is a simple Powershell function to retreive all NTFS permissions recursively from a file path.
@@ -12,8 +26,14 @@
     Enumerate-Access -Path '\\SERVER\Share' -Depth 10 -IncludeInherited $True
 
     .LINK
+    https://github.com/AndrewEllis93/PowerShell-Scripts
 
     .NOTES
+    Title: Enumerate-Access
+    Date Created : 2017-12-28
+    Last Edit: 2017-12-29
+    Author : Andrew Ellis
+    GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
     #>
 
     Param(

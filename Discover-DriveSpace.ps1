@@ -6,6 +6,9 @@
 # Author : Andrew Ellis
 # GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
 #
+# This function gets all your servers in AD and dumps the drives with sizes and remaining free space to a CSV (DriveSpace.csv). 
+# It also export some other files - Pingable.txt, PingFail.txt, and Servers.csv. Those should be self-explanatory.
+#
 ####################################################
 
 #Function declarations

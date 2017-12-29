@@ -1,10 +1,13 @@
-﻿###########################################################
+﻿####################################################
 #
-# AUTHOR  : PowerMonkey500
+# Title: Move-StaleUserFolders
+# Date Created : 2017-12-28
+# Last Edit: 2017-12-29
+# Author : Andrew Ellis
+# GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
 #
 # This script will scan all first-level sub-folders of the specified BasePath to find the most recent LastWriteTime in each one (recursively). This is really intended for user folders.
 # Any folder that does not contain any items modified over the threshold (in days) will be moved to the DisabledPath you specify.
-# If you just want to see which folders are stale, comment out the "OldDirs"loop at the end of the script, and uncomment the Out-Gridview section. Or you could replace Out-GridView with Export-CSV.
 #
 ###########################################################
 
