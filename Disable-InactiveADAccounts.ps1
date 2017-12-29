@@ -232,7 +232,7 @@ Function Disable-InactiveADAccounts {
                 Write-Output ("Disabling " + $_.SamAccountName + "...")
                 Disable-ADAccount -Identity $_.SamAccountName
                 $Date = "INACTIVE SINCE " + (Get-Date)
-                Set-ADUser -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf
+                Set-ADUser -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date}
                 $UsersDisabled += $_
             }
         }
