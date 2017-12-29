@@ -51,6 +51,9 @@ Function Start-Logging{
     $pswindow.windowsize = $newsize
     $ErrorActionPreference = 'Continue'
 
+    #Remove the trailing slash if present. 
+    If ($LogDirectory -like "*\"){$LogDirectory = $LogDirectory.substring(0,($LogDirectory.Length-1))
+
     #Create log directory if it does not exist already
     If (!(Test-Path $LogDirectory)){mkdir $LogDirectory}
 
@@ -96,6 +99,9 @@ Function Disable-InactiveADAccounts {
         [int]$MaxTryCount = 20, #Amount of times to try for identical DC results before giving up. 30 second retry delay after each failure.
         [string]$ExclusionGroup #AD group containing accounts to exclude.
     )
+
+    #Remove trailing slash if present.
+    If ($OutputDirectory -like "*\"){$OutputDirectory = $OutputDirectory.substring(0,($OutputDirectory.Length-1))
 
     #Declare try count at 0.
     $TryCount= 0
@@ -145,7 +151,7 @@ Function Disable-InactiveADAccounts {
     #Loop through array indexes
     ForEach ($i in 0..($UserCount -1)){
         #Grab user object from each resultant array, make array of each user object
-        $UserEntries = @(0) *$DCnames.Count
+        $UserEntries = @(0) * $DCnames.Count
         ForEach ($o in 0..($DCnames.Count -1)) {
             $UserEntries[$o] = (Get-Variable -Name $DCnames[$o]).Value[$i]
         }
@@ -171,7 +177,7 @@ Function Disable-InactiveADAccounts {
         #If LastLogonTimestamp is newer, use that instead of LastLogon.
         If ($LastLogonTimestamp -gt $LastLogon){$TrueLastLogon = $LastLogonTimestamp}
 
-        #UTC to EST
+        #UTC conversion
         If ($TrueLastLogon -ne 0){$TrueLastLogon = $TrueLastLogon.AddHours($UTCSkew)}
 
         #If TrueLastLogon is older than 20 years (essentially null/zero), set to true zero
