@@ -31,50 +31,45 @@ Function Start-Logging {
 
     .NOTES
     #>
-    Param (
-        [Parameter(Mandatory=$true)]
-        [String]$LogDirectory,
-        [Parameter(Mandatory=$true)]
-        [String]$LogName,
-        [Parameter(Mandatory=$true)]
-        [Int]$LogRetentionDays
-    )
+    param (
+        [Parameter(Mandatory=$true)][String]$LogDirectory,
+        [Parameter(Mandatory=$true)][String]$LogName,
+        [Parameter(Mandatory=$true)][Int]$LogRetentionDays
+        )
 
-   #Sets screen buffer from 120 width to 500 width. This stops truncation in the log.
-   $ErrorActionPreference = 'SilentlyContinue'
-   $pshost = Get-Host
-   $pswindow = $pshost.UI.RawUI
+    #Sets screen buffer from 120 width to 500 width. This stops truncation in the log.
+    $ErrorActionPreference = 'SilentlyContinue'
+    $pshost = get-host
+    $pswindow = $pshost.ui.rawui
+ 
+    $newsize = $pswindow.buffersize
+    $newsize.height = 3000
+    $newsize.width = 500
+    $pswindow.buffersize = $newsize
+ 
+    $newsize = $pswindow.windowsize
+    $newsize.height = 50
+    $newsize.width = 500
+    $pswindow.windowsize = $newsize
+    $ErrorActionPreference = 'Continue'
 
-   $newsize = $pswindow.BufferSize
-   $newsize.Height = 3000
-   $newsize.Width = 500
-   $pswindow.BufferSize = $newsize
+    #Remove the trailing slash if present. 
+    If ($LogDirectory -like "*\"){$LogDirectory = $LogDirectory.substring(0,($LogDirectory.Length-1))}
 
-   $newsize = $pswindow.WindowSize
-   $newsize.Height = 50
-   $newsize.Width = 500
-   $pswindow.WindowSize = $newsize
-   $ErrorActionPreference = 'Continue'
+    #Create log directory if it does not exist already
+    If (!(Test-Path $LogDirectory)){mkdir $LogDirectory}
 
-   #Remove the trailing slash if present. 
-   If ($LogDirectory -like "*\") {
-       $LogDirectory = $LogDirectory.SubString(0,($LogDirectory.Length-1))
-   }
+    #Starts logging.
+    New-Item -ItemType directory -Path $LogDirectory -Force | Out-Null
+    $Today = Get-Date -Format M-d-y
+    Start-Transcript -Append -Path ($LogDirectory + "\" + $LogName + "." + $Today + ".log") | Out-Null
 
-   #Create log directory if it does not exist already
-   If (!(Test-Path $LogDirectory)) {
-       New-Item -ItemType Directory $LogDirectory -Force | Out-Null
-   }
+    #Shows proper date in log.
+    Write-Output ("Start time: " + (Get-Date))
 
-   $Today = Get-Date -Format M-d-y
-   Start-Transcript -Append -Path ($LogDirectory + "\" + $LogName + "." + $Today + ".log") | Out-Null
-
-   #Shows proper date in log.
-   Write-Output ("Start time: " + (Get-Date))
-
-   #Purges log files older than X days
-   $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
-   Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -like "*.log"} | Remove-Item -Force
+    #Purges log files older than X days
+    $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
+    Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -like "*.log"} | Remove-Item -Force
 } 
 Function Disable-InactiveADAccounts {
     <#
@@ -86,7 +81,7 @@ Function Disable-InactiveADAccounts {
     "-ReportOnly" will skip actually disabling the AD accounts and just send an email report of inactivity instead. 
 
     .EXAMPLE
-    Disable-InactiveADAccounts -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -ExclusionGroup @('ServiceAccounts','Auto-Disable Exclusions') -DaysThreshold 30 -ReportOnly $True
+    Disable-InactiveADAccounts -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -ExclusionGroup "ServiceAccounts" -DaysThreshold 30 -ReportOnly $True
 
     .LINK
     https://github.com/AndrewEllis93/PowerShell-Scripts
@@ -94,97 +89,37 @@ Function Disable-InactiveADAccounts {
     .NOTES
     #>
 
-    Param( 
-        #From address for email reports.        
-        [Parameter(Mandatory=$true)]
-        [String]$From,
-
-        #If $true, email report will be sent without disabling or stamping any AD accounts.
-        [Boolean]$ReportOnly = $False, 
-
-        #SMTP server for sending reports.
-        [Parameter(Mandatory=$true)]
-        [String]$SMTPServer,
-
-        #Array. You can add more than one entry.
-        [Parameter(Mandatory=$true)]
-        [Array]$To, 
-
-        #Accounting for the time zone difference, since some results are given in UTC. Eastern time is UTC-5. 
-        [Parameter(Mandatory=$true)]
-        [Int]$UTCSkew, 
-
-        #Threshold of days of inactivity before disabling the user. Defaults to 30 days.
-        [Int]$DaysThreshold = 30, 
-
-        #Where to export CSVs etc.
-        [Parameter(Mandatory=$true)]
-        [String]$OutputDirectory, 
-
-        #Subject for email reports.
-        [String]$Subject = "Account Cleanup Report",
-
-        #Amount of times to try for identical DC results before giving up. 30 second retry delay after each failure.
-        [Int]$MaxTryCount = 20, 
-
-        #AD group containing accounts to exclude.
-        [array]$ExclusionGroups 
+    Param(
+        [Parameter(Mandatory=$true)][string]$From,
+        [boolean]$ReportOnly = $False, #If set to true, email report will be sent without disabling or stamping any AD accounts.
+        [Parameter(Mandatory=$true)][string]$SMTPServer,
+        [Parameter(Mandatory=$true)][array]$To, #Array. You can add more than one entry.
+        [Parameter(Mandatory=$true)][int]$UTCSkew, #Accounting for the time zone difference, since some results are given in UTC. Eastern time is UTC-5. 
+        [int]$DaysThreshold = 30, #Threshold of days of inactivity before disabling the user. Defaults to 30 days.
+        [Parameter(Mandatory=$true)][string]$OutputDirectory, #Where to export CSVs etc.
+        [string]$Subject = "Account Cleanup Report",
+        [int]$MaxTryCount = 20, #Amount of times to try for identical DC results before giving up. 30 second retry delay after each failure.
+        [string]$ExclusionGroup #AD group containing accounts to exclude.
     )
 
     #Remove trailing slash if present.
-    If ($OutputDirectory -like "*\") {
-        $OutputDirectory = $OutputDirectory.substring(0,($OutputDirectory.Length-1))
-    }
+    If ($OutputDirectory -like "*\"){$OutputDirectory = $OutputDirectory.substring(0,($OutputDirectory.Length-1))}
 
     #Declare try count at 0.
     $TryCount= 0
 
     #Get all DCs, add array names to vars array
-    $DCnames = (Get-ADGroupMember 'Domain Controllers').Name | Sort-Object
+    $DCnames = @()
+    $DCs = Get-ADGroupMember 'Domain Controllers'
+    $DCs | ForEach-Object {$DCnames += $_.Name}
 
-            #This just tests if we already have results for each DC, in case we are running this twice in the same session (mostly just for testing). 
-            $ExistingResults = @(0) * $DCnames.Count
-            $TestIteration = 0
-            $DCnames | ForEach-Object {
-                If (Get-Variable -Name $_ -ErrorAction SilentlyContinue){
-                    $ExistingResults[$TestIteration] = $True
-                }
-                Else {
-                    $ExistingResults[$TestIteration] = $False
-                }
-                $TestIteration++
-            }
-
-    #Check that results match from each DC by comparing all results in order. Retry if there is a mismatch, up to the MaxTryCount (default 20)
+    #Check that results match from each DC by comparing all results in order. If there is a mismatch, wait 30 seconds and retry, up to the MaxTryCount (default 20)
     While (($ComparisonResults -contains $False -or !$ComparisonResults) -and $TryCount -lt $MaxTryCount){
-        #Makes sure we don't have any left over jobs from another run
-        Get-Job | Stop-Job
-        Get-Job | Remove-Job
-
-        If ((!$ExistingResults -or $ExistingResults -contains $False) -or ($ComparisonResults -contains $False -or !$ComparisonResults)){
-            #Fetch AD users from each DC, add to named array
-            Write-Output ""
-            Write-Output "Starting data retrieval jobs..."
-
-            ForEach ($DCName in $DCnames) {
-                Start-Job -Name $DCName -ArgumentList $DCName -ScriptBlock {
-                    param($DCName)
-                    #Get AD results
-                    Import-Module ActiveDirectory
-                    $Results = Get-ADUser -Filter {Enabled -eq $True} -Server $DCName -Properties DistinguishedName,LastLogon,LastLogonTimestamp,whenCreated,Description -ErrorAction Stop
-                    $Results = $Results | Sort-Object -Property SamAccountName
-                    Return $Results
-                }
-            } 
-
-            #Wait for jobs to complete, show progress bar
-            Wait-JobsWithProgress -Activity "Retrieving and sorting results from each DC. Please be patient"
-            
-            #Put results into named arrays for each DC
-            ForEach ($DCName in $DCnames) {
-                Set-Variable -Name $DCName -Value (Receive-Job -Name $DCName)
-            }
-        }
+    #Fetch AD users from each DC, add to named array
+        $DCnames | ForEach-Object {
+            Write-Output ("Fetching last logon times from " + $_ + "...")
+            New-Variable -Name $_ -Value (Get-ADUser -Filter {Enabled -eq $True} -Server $_ -Properties DistinguishedName,LastLogon,LastLogonTimestamp,whenCreated,Description | Sort-Object SamAccountName) -Force
+        } 
 
         $ComparisonResults = @()
         
@@ -193,85 +128,19 @@ Function Disable-InactiveADAccounts {
                 Write-Output ("Comparing results from " + $DCnames[$i] + " and " + $DCnames[$i+1] + "...")
                 $NotEqual = Compare-Object (Get-Variable -Name $DCnames[$i]).Value (Get-Variable -Name $DCnames[$i+1]).Value -Property SamAccountName
 
-                If (!$NotEqual) {
-                    $ComparisonResults += $True
-                }
-                Else {
-                    $ComparisonResults += $False
-                }
+                If (!$NotEqual) {$ComparisonResults += $True}
+                Else {$ComparisonResults += $False}
             }
         }
         If ($ComparisonResults -contains $False){
             Write-Warning "One or more DCs returned differing results. This is likely just replication delay. Retrying..."
             $TryCount++
+            Start-Sleep 30
         }
     }
-    If ($TryCount -lt $MaxTryCount){
-        Write-Output "All DC results are identical!"
-    }
-    Else {
-        Throw "Try limit exceeded. Aborting."
-    }
+    If ($TryCount -lt $MaxTryCount){Write-Output "All DC results are identical!"}
+    Else {Throw "Try limit exceeded. Aborting."}
 
-    #Removes the completes jobs.
-    Get-Job | Remove-Job
-
-    #Convert our results into hash tables because they are MUCH faster to process than PSObjects.
-    If (!$ExistingResults -or $ExistingResults -contains $False){
-        Write-Output ""
-        Write-Output "Starting hash table conversions..."
-        Write-Output ""
-        ForEach ($DCName in $DCnames) {
-            [array]$Data = (Get-Variable -Name $DCName).Value
-            $Count = (Get-Variable -Name $DCName).Value.Count
-
-            Start-Job -Name $DCName -ArgumentList $Data,$Count -ScriptBlock {
-                param(
-                    [array]$Data,
-                    $Count
-                )
-                #Function to convert objects to hash tables
-                #Credit: https://gist.github.com/dlwyatt/4166704557cf73bdd3ae
-                Function ConvertTo-Hashtable{
-                    [CmdletBinding()]
-                    Param (
-                        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
-                        [psobject[]] $InputObject
-                    )
-                    Process{
-                        ForEach ($object in $InputObject){
-                            $hash = @{}
-                            
-                            ForEach ($property in $object.PSObject.Properties){
-                                $hash[$property.Name] = $property.Value
-                            }
-                
-                            $hash
-                        }
-                    }
-                }
-                #Declare the results array with empty hash tables to put the hash table objects into.
-                [array]$HashResults = @(@{}) * $Count
-                
-                #Loop through each object, convert to hash table, add to HashResults array.
-                $Iteration = 0
-                $Data | ForEach-Object {
-                    $HashResults[$Iteration] = $_ | ConvertTo-Hashtable
-                    $Iteration++
-                }
-                Return $HashResults
-            }
-        } 
-    }
-
-    #Wait for jobs to complete, show progress bar
-    Wait-JobsWithProgress -Activity "Converting results to hash tables"
-
-    #Get the hash table results from the jobs.
-    ForEach ($DCName in $DCNames){
-        Set-Variable -Name $DCName -Value (Receive-Job -Name $DCName) -Force
-    }
-    
     #Get current time for comparison later. 
     $StartTime = Get-Date
 
@@ -284,165 +153,173 @@ Function Disable-InactiveADAccounts {
     #Loop through array indexes
     ForEach ($i in 0..($UserCount -1)){
         #Grab user object from each resultant array, make array of each user object
-        $UserEntries = @(@{}) * $DCnames.Count
+        $UserEntries = @(0) * $DCnames.Count
         ForEach ($o in 0..($DCnames.Count -1)) {
             $UserEntries[$o] = (Get-Variable -Name $DCnames[$o]).Value[$i]
         }
+        If (($UserEntries.SamAccountName | Select-Object -Unique).Count -gt 1){Throw "A user mismatch at index $i has occurred. Aborting."}
 
-        #If that user's array contains a mismatch, bail. This should realistically never happen because we already compared the arrays.
-        If (($UserEntries.SamAccountName | Select-Object -Unique).Count -gt 1){
-            Throw "A user mismatch at index $i has occurred. Aborting."
-        }
-
-        #Find most recent LastLogon, whenCreated, and LastLogonTimestamps, cast to datetimes.
+        #Find most recent LastLogon, whenCreated, and LastLogonTimestamp.
         If ($UserEntries.LastLogon){
-            [datetime]$LastLogon = [datetime]::FromFileTimeUtc(($UserEntries.LastLogon | Measure-Object -Maximum).Maximum)
-            $LastLogon = $LastLogon.AddHours($UTCSkew)
+            [datetime]$LastLogon = [datetime]::FromFileTimeUtc(($UserEntries | Measure-Object -Property LastLogon -Maximum).Maximum)
             [datetime]$TrueLastLogon = $LastLogon
         }
         Else {[datetime]$LastLogon = 0; $TrueLastLogon = 0} 
 
-        [datetime]$whenCreated = $UserEntries[0].whenCreated
+        If ($UserEntries.whenCreated){
+            [datetime]$whenCreated = $UserEntries[0].whenCreated
+        }
+        Else {[datetime]$whenCreated = 0}
 
         If ($UserEntries.LastLogonTimestamp){
-            [datetime]$LastLogonTimestamp = [datetime]::FromFileTimeUtc(($UserEntries.LastLogonTimestamp | Measure-Object -Maximum).Maximum)
-            $LastLogonTimestamp = $LastLogonTimestamp.AddHours($UTCSkew)
+            [datetime]$LastLogonTimestamp = [datetime]::FromFileTimeUtc(($UserEntries | Measure-Object -Property LastLogonTimestamp -Maximum).Maximum)
         }
         Else {[datetime]$LastLogonTimestamp = 0}
 
-        #If LastLogonTimestamp is newer, use that instead of LastLogon. Realistically this should never happen, but just in case.
-        If ($LastLogonTimestamp -gt $LastLogon){
-            $TrueLastLogon = $LastLogonTimestamp
-        }
+        #If LastLogonTimestamp is newer, use that instead of LastLogon.
+        If ($LastLogonTimestamp -gt $LastLogon){$TrueLastLogon = $LastLogonTimestamp}
 
-        #If there is no last logon available from any attributes, or it is older than 20 years (essentially null/zero), use the date created instead.
-        If ($TrueLastLogon -eq 0 -or !$TrueLastLogon -or (New-TimeSpan -Start $TrueLastLogon -End $StartTime).Days -gt 7300){
-            [datetime]$TrueLastLogon = $whenCreated
-        }
+        #UTC conversion
+        If ($TrueLastLogon -ne 0){$TrueLastLogon = $TrueLastLogon.AddHours($UTCSkew)}
+
+        #If TrueLastLogon is older than 20 years (essentially null/zero), set to true zero
+        If ((New-TimeSpan -Start $TrueLastLogon -End $StartTime).Days -gt 7300){[string]$TrueLastLogon = $null}
 
         #Calculate days of inactivity.
-        $DaysInactive = (New-TimeSpan -Start $TrueLastLogon -End $StartTime).Days
+        If ($TrueLastLogon -ne $null -and $TrueLastLogon -ne ""){$DaysInactive = (New-TimeSpan -Start $TrueLastLogon -End $StartTime).Days}
+        Else {$DaysInactive = (New-TimeSpan -Start $whenCreated -End $StartTime).Days}
 
         #Create object for output array
-        $OutputObj = [PSCustomObject]@{
-            SamAccountName=$UserEntries[0].SamAccountName
-            Enabled=$UserEntries[0].Enabled
-            LastLogon=$TrueLastLogon
-            WhenCreated=$whenCreated
-            DaysInactive=$DaysInactive
-            GivenName=$UserEntries[0].GivenName
-            Surname=$UserEntries[0].SurName
-            Name=$UserEntries[0].Name
-            DistinguishedName=$UserEntries[0].DistinguishedName
-            Description=$UserEntries[0].Description
-        }  
+        $OutputObj = New-Object -TypeName PSObject
+        $OutputObj | Add-Member -MemberType NoteProperty -Name SamAccountName -Value $UserEntries[0].SamAccountName
+        $OutputObj | Add-Member -MemberType NoteProperty -Name Enabled -Value $UserEntries[0].Enabled
+        $OutputObj | Add-Member -MemberType NoteProperty -Name LastLogon -Value $TrueLastLogon
+        $OutputObj | Add-Member -MemberType NoteProperty -Name whenCreated -Value $whenCreated
+        $OutputObj | Add-Member -MemberType NoteProperty -Name DaysInactive -Value $DaysInactive
+        $OutputObj | Add-Member -MemberType NoteProperty -Name GivenName -Value $UserEntries[0].GivenName
+        $OutputObj | Add-Member -MemberType NoteProperty -Name Surname -Value $UserEntries[0].SurName
+        $OutputObj | Add-Member -MemberType NoteProperty -Name Name -Value $UserEntries[0].Name
+        $OutputObj | Add-Member -MemberType NoteProperty -Name DistinguishedName -Value $UserEntries[0].DistinguishedName
+        $OutputObj | Add-Member -MemberType NoteProperty -Name Description -Value $UserEntries[0].Description
 
-        #Append object to output array and output progress to console.
+        #Append object to output array and output preogress to console.
         $FullResults[$i] = $OutputObj
         $PercentComplete = [math]::Round((($i/$UserCount) * 100),2)
         Write-Output ("User: " + $OutputObj.SamAccountName + " - Last logon: $TrueLastLogon ($DaysInactive day(s) inactivity) - $PercentComplete% complete.")
     }
 
-    #Gets exlusions, error action is set to stop
-    If ($ExclusionGroups){
-        $UserExclusions = @()
-        ForEach ($ExclusionGroup in $ExclusionGroups){
-            Write-Output "Getting `"$ExclusionGroup`" members..."
-            $UserExclusions += (Get-ADGroupMember -Identity $ExclusionGroup -ErrorAction Stop).SamAccountName
-        }
-    }
+    Write-Output "Getting exclusion group members..."
+    $UserExclusions = (Get-ADGroupMember -Identity $ExclusionGroup -ErrorAction Stop).SamAccountName
 
-    #Filter
+    #Splits "other" and "real" users into two different arrays.
     Write-Output "Filtering users..."
-    $FilteredUsersResults = $FullResults | Where-Object {$UserExclusions -notcontains $_.SamAccountName}
+    $RealUsersResults = @()
+    $RealUsersResults = $FullResults | Where-Object {$UserExclusions -notcontains $_.SamAccountName}
+
+    $OtherUsersResults = @()
     $FullResults = $FullResults | Where-Object {$_ -ne $null}
 
     #For some reason compare-object is not working properly without specifying all properties. Don't know why. 
-    $ExcludedUsersResults = Compare-Object $FilteredUsersResults $FullResults `
+    $OtherUsersResults = Compare-Object $RealUsersResults $FullResults `
     -Property SamAccountName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description | 
     Select-Object SamAccountName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description
 
     #Add to UsersDisabled array for CSV report. Also disable and stamp accounts if ReportOnly is set to false (default).
     If (!$ReportOnly){
-        $InactiveUsersDisabled = @()
-        $FilteredUsersResults | ForEach-Object {
+        $UsersDisabled = @()
+        $RealUsersResults | ForEach-Object {
             If ($_.DaysInactive -ge $DaysThreshold){
                 Write-Output ("Disabling " + $_.SamAccountName + "...")
                 Disable-ADAccount -Identity $_.SamAccountName
                 $Date = "INACTIVE SINCE " + (Get-Date)
                 Set-ADUser -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date}
-                $InactiveUsersDisabled += $_
+                $UsersDisabled += $_
             }
         }
     }
     Else {
-        $InactiveUsersDisabled = @()
-        $FilteredUsersResults | ForEach-Object {
+        $UsersDisabled = @()
+        $RealUsersResults | ForEach-Object {
             If ($_.DaysInactive -ge $DaysThreshold){
-                $InactiveUsersDisabled += $_
+                $UsersDisabled += $_
             }
         }
     }
 
     #Filtered users - add to UsersNotDisabled array for CSV report
-    $ExcludedInactiveUsers = @()
-    $ExcludedUsersResults | ForEach-Object {
+    $OtherInactiveUsers = @()
+    $OtherUsersResults | ForEach-Object {
         If ($_.DaysInactive -ge $DaysThreshold){
-            $ExcludedInactiveUsers += $_
+            $OtherInactiveUsers += $_
         }
     }
 
-    #Create output directory if it does not exist
-    If (!(Test-Path $OutputDirectory)){
-        New-Item -ItemType Directory $OutputDirectory
-    }
+    #Reports exclusion group members.
+    $ExcludedUsersReport = $FullResults | Where-Object {$UserExclusions -contains $_.SamAccountName} | Select-Object * -ExcludeProperty Enabled,LastLogon,whenCreated,DaysInactive
 
-    #Form the paths for the output files
-    $InactiveUsersDisabledCSV = $OutputDirectory + "\InactiveUsers-Disabled.csv"
+    #Export CSVs to output directory
+    If (!(Test-Path $OutputDirectory)){mkdir $OutputDirectory}
+    $UsersDisabledCSV = $OutputDirectory + "\InactiveUsers-Disabled.csv"
     $UsersNotDisabledCSV = $OutputDirectory + "\InactiveUsers-Excluded.csv"
-
-    #Export the CSVs
-    $InactiveUsersDisabled | Export-CSV $InactiveUsersDisabledCSV -NoTypeInformation -Force
-    $ExcludedInactiveUsers | Export-CSV $UsersNotDisabledCSV -NoTypeInformation -Force
-
-    #Send email with CSVs as attachments
-    Write-Output "Sending email..."
-    Send-MailMessage -Attachments @($InactiveUsersDisabledCSV,$UsersNotDisabledCSV) -From $From -SmtpServer $SMTPServer -To $To -Subject $Subject
+    $ExcludedUsersReportCSV = $OutputDirectory + "\Auto-Disable Exclusions.csv"
+    $UsersDisabled | Export-CSV $UsersDisabledCSV -NoTypeInformation -Force
+    $OtherInactiveUsers | Export-CSV $UsersNotDisabledCSV -NoTypeInformation -Force
+    $ExcludedUsersReport | Export-CSV $ExcludedUsersReportCSV -NoTypeInformation -Force
 
     <#
     # This is here if you want to use it in conjunction with my Move-Disabled script. Just uncomment and replace with your scheduled task path. 
     Write-Output "Starting Move-Disabled task..."
     Start-ScheduledTask -TaskName "\Move-Disabled"
     #>
+
+    #Send email with CSVs as attachments
+    Write-Output "Sending email..."
+    Send-MailMessage -Attachments @($UsersDisabledCSV,$UsersNotDisabledCSV,$ExcludedUsersReportCSV) -From $From -SmtpServer $SMTPServer -To $To -Subject $Subject
+
 }
 
-Function Wait-JobsWithProgress {
-    param(
-        [Parameter(Mandatory=$true)]
-        [string]$Activity
-    )
-    # SHOW JOB PROGRESS
-    $Total = (Get-Job).Count
-    $CompletedJobs = (Get-Job -State Completed).Count
+Function Get-ADUserLastLogon ([string]$UserName){
+    ###NOT USED IN SCRIPT, JUST FOR UTILITY WHEN TWEAKING###
+    #Credit: https://www.reddit.com/r/PowerShell/comments/3u737j/getaduser_lastlogon/ (user deleted their account)
+    #I made some tweaks.
 
-    # Loop while there are running jobs
-    While ($CompletedJobs -ne $Total) {
-        # Update progress based on how many jobs are done yet.
-        # Write-Output "Waiting for background jobs: $CompletedJobs/$Total"
-        Write-Progress -Activity $Activity -PercentComplete (($CompletedJobs/$Total)*100) -Status "$CompletedJobs/$Total jobs completed."
-
-        # After updating the progress bar, get current job count
-        $CompletedJobs = (Get-Job -State Completed).Count
+    $dcs = Get-ADDomainController -Filter {Name -like "*"}
+      $time = 0
+      $dt = 0
+        foreach($dc in $dcs) {
+        Try
+        {
+            $user = Get-ADUser -Server $dc -identity $userName -properties LastLogon,LastLogonTimestamp
+            if($user.LastLogonTimeStamp -gt $time)
+            {
+                $time = $user.LastLogonTimeStamp
+            }
+            if ($user.LastLogon -gt $time)
+            {
+                $time = $user.LastLogon
+            }   
+        }
+        Catch {}
     }
-    Write-Progress -Activity $Activity -Completed
+    $dt = [DateTime]::FromFileTime($time)
+
+    $OutputObj = New-Object -TypeName PSObject
+    $OutputObj | Add-Member -MemberType NoteProperty -Name SamAccountName -Value $user.SamAccountName
+    $OutputObj | Add-Member -MemberType NoteProperty -Name Enabled -Value $user.Enabled
+    $OutputObj | Add-Member -MemberType NoteProperty -Name LastLogon -Value $dt
+    $OutputObj | Add-Member -MemberType NoteProperty -Name GivenName -Value $user.GivenName
+    $OutputObj | Add-Member -MemberType NoteProperty -Name Surname -Value $user.SurName
+    $OutputObj | Add-Member -MemberType NoteProperty -Name Name -Value $user.Name
+    $OutputObj | Add-Member -MemberType NoteProperty -Name DistinguishedName -Value $user.DistinguishedNameName
+
+    Return $OutputObj
 }
 
 #Start logging.
-Start-Logging -LogDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -LogName "Disable-InactiveADAccounts" -LogRetentionDays 30
+Start-Logging -logdirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -logname "Disable-InactiveADAccounts" -LogRetentionDays 30
 
 #Start function.
-#. Disable-InactiveADAccounts -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -ExclusionGroup "ServiceAccounts" -ReportOnly $True
-. Disable-InactiveADAccounts -To @("Andrew.Ellis@townebank.net") -From "script@townebank.net" -SMTPServer "ENTCAS.tb.local" -UTCSkew -5 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -ExclusionGroups @('ServiceAccts','Auto-Disable Exclusions-ENT') -ReportOnly $True
+Disable-InactiveADAccounts -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -ExclusionGroup "ServiceAccounts"
 
 #Stop logging.
 Stop-Transcript
