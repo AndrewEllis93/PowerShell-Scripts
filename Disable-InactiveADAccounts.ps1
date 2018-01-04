@@ -268,8 +268,10 @@ Function Disable-InactiveADAccounts {
     Wait-JobsWithProgress -Activity "Converting results to hash tables"
 
     #Get the hash table results from the jobs.
-    ForEach ($DCName in $DCNames){
-        Set-Variable -Name $DCName -Value (Receive-Job -Name $DCName) -Force
+    If (!$ExistingResults -or $ExistingResults -contains $False){
+        ForEach ($DCName in $DCNames){
+            Set-Variable -Name $DCName -Value (Receive-Job -Name $DCName) -Force
+        }
     }
     
     #Get current time for comparison later. 
@@ -442,6 +444,6 @@ Start-Logging -LogDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -LogName 
 
 #Start function.
 . Disable-InactiveADAccounts -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -ExclusionGroup @("ServiceAccounts") -ReportOnly $True
-
 #Stop logging.
+Write-Output ("Stop time: " + (Get-Date))
 Stop-Transcript

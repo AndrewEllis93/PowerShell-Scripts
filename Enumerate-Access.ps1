@@ -20,10 +20,9 @@ Function Enumerate-Access {
     .DESCRIPTION
     IncludeInherited defaults to False. This will only show excplicit ACL entries, excluding the top-level path which will always show all permissions.
     Depth is unlimited unless specified.
-    Paths should not contain trailing slashes.
 
     .EXAMPLE
-    Enumerate-Access -Path '\\SERVER\Share' -Depth 10 -IncludeInherited $True
+    Enumerate-Access -Path '\\SERVER\Share' -Depth 10 -IncludeInherited
 
     .LINK
     https://github.com/AndrewEllis93/PowerShell-Scripts
@@ -36,29 +35,39 @@ Function Enumerate-Access {
     GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
     #>
 
+    [cmdletbinding()]
     Param(
         [Parameter(Mandatory=$true)][string]$Path,
         [int]$Depth,
-        [boolean]$IncludeInherited=$False
+        [switch]$IncludeInherited=$False
     )
 
     #Remove the trailing slash if present. 
-    If ($Path -like "*\"){$Path = $Path.substring(0,($Path.Length-1))}
-    If (!(Test-Path $Path)){Throw "Path was not reachable."}
+    If ($Path -like "*\"){
+        $Path = $Path.substring(0,($Path.Length-1))
+    }
+    If (!(Test-Path $Path)){
+        Throw "Path was not reachable."
+    }
 
-    If ($Depth){$Tree = Get-Childitem $Path -recurse -Depth $Depth -Directory}
-    Else {$Tree = Get-Childitem $Path -recurse -Directory}
+    Write-Verbose "Getting file tree..."
+    If ($Depth){
+        $Tree = Get-Childitem $Path -recurse -Depth $Depth -Directory -ErrorAction
+    }
+    Else {
+        $Tree = Get-Childitem $Path -recurse -Directory
+    }
 
-    $Output = @()
+    $Output = [System.Collections.ArrayList]@()
     $Iteration = 1
     $Total = $Tree.Count
 
-    #Top-level ACL
+    #Top-level ACL (always shows inherited permissions)
     $TopLevelACL = $Path | Get-Acl
     $FullName = (Get-Item $Path).FullName
     $Index = 0
     $TopLevelACL.Access.IdentityReference.Value | ForEach-Object {
-        $OutputObj = New-Object -TypeName PSObject
+        $OutputObj = [PSCustomObject]@{}
         $OutputObj | Add-Member -Name FullName -MemberType NoteProperty -Value $FullName
         $OutputObj | Add-Member -Name Owner -MemberType NoteProperty -Value $TopLevelACL.Owner
         $OutputObj | Add-Member -Name IdentityReference -MemberType NoteProperty -Value ($TopLevelACL.Access.IdentityReference.Value[$Index])
@@ -67,7 +76,7 @@ Function Enumerate-Access {
         $OutputObj | Add-Member -Name IsInherited -MemberType NoteProperty -Value ($TopLevelACL.Access.IsInherited[$Index])
         $OutputObj | Add-Member -Name InheritanceFlags -MemberType NoteProperty -Value ($TopLevelACL.Access.InheritanceFlags[$Index])
 
-        $Output += $OutputObj
+        $Output.Add($OutputObj) > $null
         $Index++
     }
 
@@ -82,7 +91,7 @@ Function Enumerate-Access {
         If ($IncludeInherited -eq $False) {
             $ACL.Access.IdentityReference.Value | ForEach-Object {
                 If ($ACL.Access.IsInherited[$Index] -eq $False){
-                    $OutputObj = New-Object -TypeName PSObject
+                    $OutputObj = [PSCustomObject]@{}
                     $OutputObj | Add-Member -Name FullName -MemberType NoteProperty -Value $FullName
                     $OutputObj | Add-Member -Name Owner -MemberType NoteProperty -Value $ACL.Owner
                     $OutputObj | Add-Member -Name IdentityReference -MemberType NoteProperty -Value ($ACL.Access.IdentityReference.Value[$Index])
@@ -90,15 +99,15 @@ Function Enumerate-Access {
                     $OutputObj | Add-Member -Name AccessControlType -MemberType NoteProperty -Value ($ACL.Access.AccessControlType[$Index])
                     $OutputObj | Add-Member -Name IsInherited -MemberType NoteProperty -Value ($ACL.Access.IsInherited[$Index])
                     $OutputObj | Add-Member -Name InheritanceFlags -MemberType NoteProperty -Value ($ACL.Access.InheritanceFlags[$Index])
-
-                    $Output += $OutputObj
+                    
+                    $Output.Add($OutputObj) > $null
                     $Index++
                 }
             }
         }
         Else {
             $ACL.Access.IdentityReference.Value | ForEach-Object {
-                $OutputObj = New-Object -TypeName PSObject
+                $OutputObj = [PSCustomObject]@{}
                 $OutputObj | Add-Member -Name FullName -MemberType NoteProperty -Value $FullName
                 $OutputObj | Add-Member -Name Owner -MemberType NoteProperty -Value $ACL.Owner
                 $OutputObj | Add-Member -Name IdentityReference -MemberType NoteProperty -Value ($ACL.Access.IdentityReference.Value[$Index])
@@ -107,14 +116,21 @@ Function Enumerate-Access {
                 $OutputObj | Add-Member -Name IsInherited -MemberType NoteProperty -Value ($ACL.Access.IsInherited[$Index])
                 $OutputObj | Add-Member -Name InheritanceFlags -MemberType NoteProperty -Value ($ACL.Access.InheritanceFlags[$Index])
 
-                $Output += $OutputObj
-                $Index++
+                $Output.Add($OutputObj) > $null
+                $Index++      
             }
         }
         $PercentComplete = [math]::Round((($Iteration / $Total) * 100),1)
-        If ($PercentComplete -lt 100){Write-Progress -Activity "Scanning permissions" -Status "$PercentComplete% Complete ($Iteration/$Total)" -PercentComplete $PercentComplete}
-        Else {Write-Progress -Activity "Scanning permissions" -Status "$PercentComplete% Complete ($Iteration/$Total)" -PercentComplete $PercentComplete -Completed}
+        If ($PercentComplete -lt 100){
+            Write-Progress -Activity "Scanning permissions" -Status "$PercentComplete% Complete ($Iteration/$Total)" -PercentComplete $PercentComplete
+        }
+        Else {
+            Write-Progress -Activity "Scanning permissions" -Status "$PercentComplete% Complete ($Iteration/$Total)" -PercentComplete $PercentComplete -Completed
+        }
         $Iteration++
     }
     Return $Output
 }
+
+$ACL = Enumerate-Access -Path "C:\Test"
+$ACL | Export-CSV C:\TestACL.csv -NoTypeInformation
