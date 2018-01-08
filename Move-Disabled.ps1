@@ -2,7 +2,7 @@
 #
 # Title: Move-Disabled
 # Date Created : 2017-12-28
-# Last Edit: 2017-12-29
+# Last Edit: 2018-01-08
 # Author : Andrew Ellis
 # GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
 #
@@ -38,8 +38,7 @@ Function Move-Disabled {
     The InactivityDays argument is optional, but is there for if you are using my Disable-InactiveADAccounts script. This is so it can account for inactivity in its calculations. Please make sure you use the same on both.
 
     .EXAMPLE
-    Move-Disabled -ParentOU "OU=Disabled Objects,DC=domain,DC=local" -InactivityDays 30 -ReportOnly $True -ExclusionUsersGroup "ServiceAccts"
-    Move-Disabled -ParentOU "OU=Disabled Objects,DC=domain,DC=local" -InactivityDays 30 
+    Move-Disabled -ParentOU "OU=Disabled Objects,DC=domain,DC=local" -InactivityDays 30 -ExclusionUserGroups @('ServiceAccts') -ExclusionOUs @('OU=Test,DC=domain,DC=local','OU=Test2,DC=domain,DC=local') -ReportOnly
 
     .LINK
     https://github.com/AndrewEllis93/PowerShell-Scripts
@@ -47,16 +46,17 @@ Function Move-Disabled {
     .NOTES
     Title: Move-Disabled
     Date Created : 2017-12-28
-    Last Edit: 2017-12-29
+    Last Edit: 2018-01-08
     Author : Andrew Ellis
     GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
     #>
 
     Param (
         [Parameter(Mandatory=$true)][string]$ParentOU,
-        [string]$ExclusionUsersGroup,
-        [boolean]$ReportOnly = $False,
-        [int]$InactivityDays = 30
+        [array]$ExclusionUserGroups,
+        [switch]$ReportOnly = $False,
+        [int]$InactivityDays = 30,
+        [array]$ExclusionOUs = @()
     )
 
     #DECLARATIONS
@@ -64,24 +64,39 @@ Function Move-Disabled {
         $MovedUsers = 0 #Leave at 0.
         $MovedComputers = 0 #Leave at 0.
 
-    #EXCLUSION GROUP
-        Write-Output "Getting exclusion users group members..."
-        If ($ExclusionUsersGroup){$Exclusions = Get-ADGroupMember $ExclusionUsersGroup -ErrorAction Stop}
-
     #MOVE NEWLY DISABLED USERS
         Write-Host ""
         Write-Output "NEWLY DISABLED MOVE:"
         #Gets all newly users. msExchRecipientTypeDetails makes sure we are excluding things like shared mailboxes.
         Write-Output "Getting newly disabled users..."
-        If ($ExclusionUsersGroup){
-            $DisabledUsers = Search-ADAccount -AccountDisabled -UsersOnly | 
-            Get-ADUser -Properties msExchRecipientTypeDetails,info,Enabled,distinguishedName,ExtensionAttribute3 | 
-            Where-Object {@(1,128,65536,2097152,2147483648,$null) -contains $_.msExchRecipientTypeDetails -and $_.DistinguishedName -notlike "*Builtin*" -and $_.DistinguishedName -notlike "*$ParentOU" -and $Exclusions.SamAccountName -notcontains $_.SamAccountName}
+        $DisabledUsers = 
+            Search-ADAccount -AccountDisabled -UsersOnly | 
+                Get-ADUser -Properties msExchRecipientTypeDetails,info,Enabled,distinguishedName,ExtensionAttribute3 | 
+                    Where-Object {
+                        @(1,128,65536,2097152,2147483648,$null) -contains $_.msExchRecipientTypeDetails -and 
+                        $_.DistinguishedName -notlike "*Builtin*" -and 
+                        $_.DistinguishedName -notlike "*$ParentOU" -and 
+                        $Exclusions.SamAccountName -notcontains $_.SamAccountName
         }
-        Else{
-            $DisabledUsers = Search-ADAccount -AccountDisabled -UsersOnly | 
-            Get-ADUser -Properties msExchRecipientTypeDetails,info,Enabled,distinguishedName,ExtensionAttribute3 | 
-            Where-Object {@(1,128,65536,2097152,2147483648,$null) -contains $_.msExchRecipientTypeDetails -and $_.DistinguishedName -notlike "*Builtin*" -and $_.DistinguishedName -notlike "*$ParentOU"}
+
+        #AD group filters if specified.
+        If ($ExclusionUserGroups){
+            [array]$FilterUserSAMs = @()
+            ForEach ($ExclusionUserGroup in $ExclusionUserGroups){
+                Write-Output "Getting $ExclusionUserGroup members..."
+                $FilterUserSAMs += (Get-ADGroupMember $ExclusionUserGroup -ErrorAction Stop).SamAccountName
+            }
+            $DisabledUsers = $DisabledUsers | Where-Object {$FilterUserSAMs -notcontains $_.SamAccountName}
+        }
+
+        #OU filters if specified.
+        If ($ExclusionOUs){
+            [array]$FilterArray = @()
+            ForEach ($ExclusionOU in $ExclusionOUs){
+                $Filter += "`$_.DistinguishedName -NotLike *$ExclusionOU"
+            }
+            $Filter = [scriptblock]::Create($FilterArray -join " -and ")
+            $DisabledUsers = $DisabledUsers | Where-Object -FilterScript $Filter
         }
 
         Write-Output ($DisabledUsers.Count.toString() + " newly disabled user objects were found.")
@@ -90,8 +105,12 @@ Function Move-Disabled {
         ForEach ($DisabledUser in $DisabledUsers){
             #Moves the user.
             Write-Output ("Moving user: " + $DisabledUser.SamAccountName + "...")
-            If ($ReportOnly) {Move-ADObject -Identity $DisabledUser.DistinguishedName -TargetPath "OU=0-30 Days,OU=Users,$ParentOU" -WhatIf}
-            Else {Move-ADObject -Identity $DisabledUser.DistinguishedName -TargetPath "OU=0-30 Days,OU=Users,$ParentOU"}
+            If ($ReportOnly) {
+                Move-ADObject -Identity $DisabledUser.DistinguishedName -TargetPath "OU=0-30 Days,OU=Users,$ParentOU" -WhatIf
+            }
+            Else {
+                Move-ADObject -Identity $DisabledUser.DistinguishedName -TargetPath "OU=0-30 Days,OU=Users,$ParentOU"
+            }
             $MovedUsers++
 
             #Sets the info (notes) field with the old OU.
@@ -99,17 +118,29 @@ Function Move-Disabled {
             Write-Output ("Setting info field for user: " + $DisabledUser.SamAccountName + "...")
             #Gets the parent OU.
             $OU = $DisabledUser.DistinguishedName.Split(',',2)[1]
-            If ($DisabledUser.Info -eq $null -or $DisabledUser.Info -eq ""){$NewInfo = "OLD OU: " + $OU}
-            Else {$NewInfo = "OLD OU: " + $OU + "`n" + $DisabledUser.Info}
-            If ($ReportOnly){Set-ADUser -Identity $DisabledUser.SamAccountName -Replace @{info=$NewInfo} -WhatIf}
-            Else {Set-ADUser -Identity $DisabledUser.SamAccountName -Replace @{info=$NewInfo}}
+            If ($DisabledUser.Info -eq $null -or $DisabledUser.Info -eq ""){
+                $NewInfo = "OLD OU: " + $OU
+            }
+            Else {
+                $NewInfo = "OLD OU: " + $OU + "`n" + $DisabledUser.Info
+            }
+            If ($ReportOnly){
+                Set-ADUser -Identity $DisabledUser.SamAccountName -Replace @{info=$NewInfo} -WhatIf
+            }
+            Else {
+                Set-ADUser -Identity $DisabledUser.SamAccountName -Replace @{info=$NewInfo}
+            }
 
             #Sets ExtensionAttribute3 for the date of disablement if not already set. 
             If ($DisabledUser.ExtensionAttribute3 -notlike "*DISABLED*" -and $DisabledUser.ExtensionAttribute3 -notlike "*INACTIVE*"){
                 $Date = "DISABLED ON " + (Get-Date)
                 Write-Output ("Setting ExtensionAttribute3 for user: " + $DisabledUser.SamAccountName + "...")
-                If ($ReportOnly) {Set-ADUser -Identity $DisabledUser.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf}
-                Else {Set-ADUser -Identity $DisabledUser.SamAccountName -Replace @{ExtensionAttribute3=$Date}}
+                If ($ReportOnly) {
+                    Set-ADUser -Identity $DisabledUser.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf
+                }
+                Else {
+                    Set-ADUser -Identity $DisabledUser.SamAccountName -Replace @{ExtensionAttribute3=$Date}
+                }
             }
         }
 
@@ -168,8 +199,12 @@ Function Move-Disabled {
                     Write-Output ("Setting ExtensionAttribute 3 for user: " + $DisabledOUUser.SamAccountName + " (user was in disabled objects OU but did not have a disabled date.)")
 
                     $Date = "DISABLED ON " + (Get-Date)
-                    If ($ReportOnly){Set-ADUser -Identity $DisabledOUUser.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf}
-                    Else {Set-ADUser -Identity $DisabledOUUser.SamAccountName -Replace @{ExtensionAttribute3=$Date}}
+                    If ($ReportOnly){
+                        Set-ADUser -Identity $DisabledOUUser.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf
+                    }
+                    Else {
+                        Set-ADUser -Identity $DisabledOUUser.SamAccountName -Replace @{ExtensionAttribute3=$Date}
+                    }
 
                     #Sets the variable for comparison in the rest of the loop. It was null. 
                     $DisabledOUUser.ExtensionAttribute3 = $Date
@@ -191,15 +226,23 @@ Function Move-Disabled {
                 #Increment through OUs
                 If ($DaysDisabled -ge 30 -and $DaysDisabled -le 180 -and $DisabledOUUser.DistinguishedName -notlike "*OU=30-180 Days,OU=Users,$ParentOU"){
                     Write-Output ("Moving user to the 30-180 Days OU: " + $DisabledOUUser.SamAccountName)
-                    If ($ReportOnly) {Move-ADObject -Identity $DisabledOUUser.DistinguishedName -TargetPath "OU=30-180 Days,OU=Users,$ParentOU" -WhatIf}
-                    Else {Move-ADObject -Identity $DisabledOUUser.DistinguishedName -TargetPath "OU=30-180 Days,OU=Users,$ParentOU"}
+                    If ($ReportOnly) {
+                        Move-ADObject -Identity $DisabledOUUser.DistinguishedName -TargetPath "OU=30-180 Days,OU=Users,$ParentOU" -WhatIf
+                    }
+                    Else {
+                        Move-ADObject -Identity $DisabledOUUser.DistinguishedName -TargetPath "OU=30-180 Days,OU=Users,$ParentOU"
+                    }
                     $30to180DayMovedUsers++
                 }
                 Else {
                     If ($DaysDisabled -gt 180 -and $DisabledOUUser.DistinguishedName -notlike "*OU=Over 180 Days,OU=Users,$ParentOU"){
                         Write-Output ("Moving user to the Over 180 Days OU: " + $DisabledOUUser.SamAccountName)
-                        If ($ReportOnly) {Move-ADObject -Identity $DisabledOUUser.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Users,$ParentOU" -WhatIf}
-                        Else {Move-ADObject -Identity $DisabledOUUser.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Users,$ParentOU"}
+                        If ($ReportOnly) {
+                            Move-ADObject -Identity $DisabledOUUser.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Users,$ParentOU" -WhatIf
+                        }
+                        Else {
+                            Move-ADObject -Identity $DisabledOUUser.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Users,$ParentOU"
+                        }
                         $180DayMovedUsers++
                     }
                 }
@@ -218,8 +261,12 @@ Function Move-Disabled {
                     Write-Output ("Setting ExtensionAttribute 3 for Computer: " + $DisabledOUComputer.SamAccountName + " (computer was in disabled objects OU but did not have a disabled date.)")
 
                     $Date = "DISABLED ON " + (Get-Date)
-                    If ($ReportOnly){Set-ADComputer -Identity $DisabledOUComputer.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf}
-                    Else {Set-ADComputer -Identity $DisabledOUComputer.SamAccountName -Replace @{ExtensionAttribute3=$Date}}
+                    If ($ReportOnly){
+                        Set-ADComputer -Identity $DisabledOUComputer.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf
+                    }
+                    Else {
+                        Set-ADComputer -Identity $DisabledOUComputer.SamAccountName -Replace @{ExtensionAttribute3=$Date}
+                    }
 
                     #Sets the variable for comparison in the rest of the loop. It was null. 
                     $DisabledOUComputer.ExtensionAttribute3 = $Date
@@ -232,15 +279,23 @@ Function Move-Disabled {
                 #Increment through OUs
                 If ($DaysDisabled -ge 30 -and $DaysDisabled -le 180 -and $DisabledOUComputer.DistinguishedName -notlike "*OU=30-180 Days,OU=Computers,$ParentOU"){
                     Write-Output ("Moving computer to the 30-180 Days OU: " + $DisabledOUComputer.SamAccountName)
-                    If ($ReportOnly) {Move-ADObject -Identity $DisabledOUComputer.DistinguishedName -TargetPath "OU=30-180 Days,OU=Computers,$ParentOU" -WhatIf}
-                    Else {Move-ADObject -Identity $DisabledOUComputer.DistinguishedName -TargetPath "OU=30-180 Days,OU=Computers,$ParentOU"}
+                    If ($ReportOnly) {
+                        Move-ADObject -Identity $DisabledOUComputer.DistinguishedName -TargetPath "OU=30-180 Days,OU=Computers,$ParentOU" -WhatIf
+                    }
+                    Else {
+                        Move-ADObject -Identity $DisabledOUComputer.DistinguishedName -TargetPath "OU=30-180 Days,OU=Computers,$ParentOU"
+                    }
                     $30to180DayMovedComputers++
                 }
                 Else{
                     If ($DaysDisabled -gt 180 -and $DisabledOUComputer.DistinguishedName -notlike "*OU=Over 180 Days,OU=Computers,$ParentOU"){
                         Write-Output ("Moving computer to the Over 180 Days OU: " + $DisabledOUComputer.SamAccountName)
-                        If ($ReportOnly) {Move-ADObject -Identity $DisabledOUComputer.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Computers,$ParentOU" -WhatIf}
-                        Else {Move-ADObject -Identity $DisabledOUComputer.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Computers,$ParentOU"}
+                        If ($ReportOnly) {
+                            Move-ADObject -Identity $DisabledOUComputer.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Computers,$ParentOU" -WhatIf
+                        }
+                        Else {
+                            Move-ADObject -Identity $DisabledOUComputer.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Computers,$ParentOU"
+                        }
                         $180DayMovedComputers++
                 }
             }
@@ -271,16 +326,16 @@ Function Move-Disabled {
         Write-Output "ATTRIBUTE CLEANUP:"
         Write-Output "Getting non-disabled objects with ExtensionAttribute3 set..."
         $NonDisabledUsers = Get-ADUser -Filter * -Properties DistinguishedName,ExtensionAttribute3,SamAccountName,Enabled | Where-Object {`
-            $_.DistinguishedName -NotLike "*$ParentOU" -and `
-            $_.Enabled -eq $True -and `
-            $_.ExtensionAttribute3 -ne "" -and `
-            $_.ExtensionAttribute3 -ne $null `
+            $_.DistinguishedName -NotLike "*$ParentOU" -and
+            $_.Enabled -eq $True -and
+            $_.ExtensionAttribute3 -ne "" -and
+            $_.ExtensionAttribute3 -ne $null
         }
         $NonDisabledComputers = Get-ADComputer -Filter * -Properties DistinguishedName,ExtensionAttribute3,SamAccountName,Enabled | Where-Object {`
-            $_.DistinguishedName -NotLike "*$ParentOU" -and `
-            $_.Enabled -eq $True -and `
-            $_.ExtensionAttribute3 -ne "" -and `
-            $_.ExtensionAttribute3 -ne $null `
+            $_.DistinguishedName -NotLike "*$ParentOU" -and
+            $_.Enabled -eq $True -and
+            $_.ExtensionAttribute3 -ne "" -and
+            $_.ExtensionAttribute3 -ne $null
         }
 
         Write-Output (($NonDisabledUsers.SamAccountName.Count).ToString() + " users were found.")
@@ -288,14 +343,22 @@ Function Move-Disabled {
 
         ForEach ($NonDisabledUser in $NonDisabledUsers){
             Write-Output ("Clearing ExtensionAttribute3 for user: " + $NonDisabledUser.SamAccountName)
-            If ($ReportOnly){Set-ADUser -Identity $NonDisabledUser.SamAccountName -Clear ExtensionAttribute3 -WhatIf}
-            Else {Set-ADUser -Identity $NonDisabledUser.SamAccountName -Clear ExtensionAttribute3}
+            If ($ReportOnly){
+                Set-ADUser -Identity $NonDisabledUser.SamAccountName -Clear ExtensionAttribute3 -WhatIf
+            }
+            Else {
+                Set-ADUser -Identity $NonDisabledUser.SamAccountName -Clear ExtensionAttribute3
+            }
         }
 
         ForEach ($NonDisabledComputer in $NonDisabledComputers){
             Write-Output ("Clearing ExtensionAttribute3 for computer: " + $NonDisabledComputer.SamAccountName)
-            If ($ReportOnly) {Set-ADComputer -Identity $NonDisabledComputer.SamAccountName -Clear ExtensionAttribute3 -WhatIf}
-            Else {Set-ADComputer -Identity $NonDisabledComputer.SamAccountName -Clear ExtensionAttribute3}
+            If ($ReportOnly) {
+                Set-ADComputer -Identity $NonDisabledComputer.SamAccountName -Clear ExtensionAttribute3 -WhatIf
+            }
+            Else {
+                Set-ADComputer -Identity $NonDisabledComputer.SamAccountName -Clear ExtensionAttribute3
+            }
         }
 }
 
@@ -324,7 +387,9 @@ Function Start-Logging{
     $ErrorActionPreference = 'Continue'
 
     #Create log directory if it does not exist already
-    If (!(Test-Path $LogDirectory)){mkdir $LogDirectory}
+    If (!(Test-Path $LogDirectory)){
+        mkdir $LogDirectory
+    }
 
     #Starts logging.
     New-Item -ItemType directory -Path $LogDirectory -Force | Out-Null
@@ -336,14 +401,14 @@ Function Start-Logging{
 
     #Purges log files older than X days
     $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
-    Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -like "*.log"} | Remove-Item -Force
+    Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object {!$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -like "*.log"} | Remove-Item -Force
 } 
 
 #Start logging
 Start-Logging -LogDirectory "C:\Logs\Move-DisabledLog" -LogName "Move-DisabledLog" -LogRetentionDays 30
 
 #Call function
-Move-Disabled -ParentOU "OU=Disabled Objects,DC=domain,DC=local" -InactivityDays 30 -ExclusionUsersGroup "Test Group" -ReportOnly $true
+Move-Disabled -ParentOU "OU=Disabled Objects,DC=domain,DC=local" -InactivityDays 30 -ReportOnly -ExclusionUserGroups @('ServiceAccts') -ExclusionOUs @('OU=Test,DC=domain,DC=local','OU=Test2,DC=domain,DC=local')
 
 #Stop logging
 Stop-Transcript
