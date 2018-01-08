@@ -56,7 +56,7 @@ Function Move-Disabled {
         [array]$ExclusionUserGroups,
         [switch]$ReportOnly = $False,
         [int]$InactivityDays = 30,
-        [array]$ExclusionOUs = @()
+        [array]$ExclusionOUs
     )
 
     #DECLARATIONS
