@@ -93,7 +93,7 @@ Function Move-Disabled {
         If ($ExclusionOUs){
             [array]$FilterArray = @()
             ForEach ($ExclusionOU in $ExclusionOUs){
-                $Filter += "`$_.DistinguishedName -NotLike *$ExclusionOU"
+                $FilterArray += "`$_.DistinguishedName -NotLike `"*$ExclusionOU`""
             }
             $Filter = [scriptblock]::Create($FilterArray -join " -and ")
             $DisabledUsers = $DisabledUsers | Where-Object -FilterScript $Filter
