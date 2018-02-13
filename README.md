@@ -5,6 +5,8 @@ Please read the header descriptions and comments in each script body, some conta
 
 **Disable-InactiveADAccounts:** Make sure you read through the comments (as with all of these scripts). It just finds the last logon for all AD accounts and disables any that have been inactive for X number of days (depending on what threshold you set). The difference with this script is that it gets the most accurate last logon available by comparing the results from all domain controllers. By default the lastlogontimestamp is only replicated every 14 days minus a random percentage of 5. This makes it much more accurate. It also supports AD exclusion groups (you can specify more than one) that allow you to exclude things like service accounts. It exports CSVs and sends an email report to the specified recipients.
 
+**Disable-InactiveADComputers** This is just a version of Disable-InactiveADAccounts for computer objects instead. 
+
 **Discover-DriveSpace:** This one gets all your servers in AD and dumps the drives with sizes and remaining free space to a CSV (drivespace.csv). It also export some other files - pingable.txt, pingfail.txt, and servers.csv. Those should be self-explanatory.
 
 **Discover-Shares:** This one is a discovery function to find all Windows shares on the domain. Useful for acquisitions.

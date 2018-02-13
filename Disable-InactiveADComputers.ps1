@@ -1,14 +1,14 @@
 ﻿####################################################
 #
-# Title: Disable-InactiveADAccounts
+# Title: Disable-InactiveADComputers
 # Date Created : 2017-09-22
 # Last Edit: 2017-12-29
 # Author : Andrew Ellis
 # GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
 #
 # Notes:
-# This finds the last logon for all AD accounts and disables any that have been inactive for X number of days (depending on what threshold you set). 
-# The difference with this script is that it gets the most accurate last logon available by comparing the results from all domain controllers. By default the lastlogontimestamp is only replicated every 14 days minus a random percentage of 5. This makes it much more accurate, but also it is a very slow. It also supports an exclusion AD group that you can put things like service accounts in to prevent them from being disabled. It will also email a report to the specified email addresses.
+# This finds the last logon for all AD computers and disables any that have been inactive for X number of days (depending on what threshold you set). 
+# The difference with this script is that it gets the most accurate last logon available by comparing the results from all domain controllers. By default the lastlogontimestamp is only replicated every 14 days minus a random percentage of 5. This makes it much more accurate, but also it is a very slow. It also supports an exclusion AD group that you can put things like service computers in to prevent them from being disabled. It will also email a report to the specified email addresses.
 # WARNING: THIS SCRIPT WILL OVERWRITE EXTENSIONATTRIBUTE3 FOR INACTIVE USERS, MAKE SURE YOU ARE NOT USING IT FOR ANYTHING ELSE
 # This script is SLOW because it gets the most accurate last logon possible by comparing results from all DCs. By default the lastlogontimestamp is only replicated every 14 days minus a random percentage of 5.
 #
@@ -76,17 +76,17 @@ Function Start-Logging {
    $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
    Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -like "*.log"} | Remove-Item -Force
 } 
-Function Disable-InactiveADAccounts {
+Function Disable-InactiveADComputers {
     <#
     .SYNOPSIS
-    This script disables AD accounts older than the threshold (in days) and stamps them in ExtensionAttribute3 with the disabled date. It also sends an email report.
+    This script disables AD computers older than the threshold (in days) and stamps them in ExtensionAttribute3 with the disabled date. It also sends an email report.
 
     .DESCRIPTION
-    Make sure you read through the comments (as with all of these scripts). It just finds the last logon for all AD accounts and disables any that have been inactive for X number of days (depending on what threshold you set). The difference with this script is that it gets the most accurate last logon available by comparing the results from all domain controllers. By default the lastlogontimestamp is only replicated every 14 days minus a random percentage of 5. This makes it much more accurate. It also supports an exclusion AD group that you can put things like service accounts in to prevent them from being disabled. It will also email a report to the specified email addresses.
-    "-ReportOnly" will skip actually disabling the AD accounts and just send an email report of inactivity instead. 
+    Make sure you read through the comments (as with all of these scripts). It just finds the last logon for all AD computers and disables any that have been inactive for X number of days (depending on what threshold you set). The difference with this script is that it gets the most accurate last logon available by comparing the results from all domain controllers. By default the lastlogontimestamp is only replicated every 14 days minus a random percentage of 5. This makes it much more accurate. It also supports an exclusion AD group that you can put things like service computers in to prevent them from being disabled. It will also email a report to the specified email addresses.
+    "-ReportOnly" will skip actually disabling the AD computers and just send an email report of inactivity instead. 
 
     .EXAMPLE
-    Disable-InactiveADAccounts -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -ExclusionGroup @('ServiceAccounts','Auto-Disable Exclusions') -DaysThreshold 30 -ReportOnly $True
+    Disable-InactiveADComputers -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADComputers" -ExclusionGroup @('ServiceComputers','Auto-Disable Exclusions') -DaysThreshold 30 -ReportOnly $True
 
     .LINK
     https://github.com/AndrewEllis93/PowerShell-Scripts
@@ -99,8 +99,8 @@ Function Disable-InactiveADAccounts {
         [Parameter(Mandatory=$true)]
         [String]$From,
 
-        #If $true, email report will be sent without disabling or stamping any AD accounts.
-        [Boolean]$ReportOnly = $False, 
+        #If $true, email report will be sent without disabling or stamping any AD computers.
+        [switch]$ReportOnly = $False, 
 
         #SMTP server for sending reports.
         [Parameter(Mandatory=$true)]
@@ -110,7 +110,7 @@ Function Disable-InactiveADAccounts {
         [Parameter(Mandatory=$true)]
         [Array]$To, 
 
-        #Accounting for the time zone difference, since some results are given in UTC. Eastern time is UTC-5. 
+        #Computering for the time zone difference, since some results are given in UTC. Eastern time is UTC-5. 
         [Parameter(Mandatory=$true)]
         [Int]$UTCSkew, 
 
@@ -122,12 +122,12 @@ Function Disable-InactiveADAccounts {
         [String]$OutputDirectory, 
 
         #Subject for email reports.
-        [String]$Subject = "Account Cleanup Report",
+        [String]$Subject = "Computer Cleanup Report",
 
         #Amount of times to try for identical DC results before giving up. 30 second retry delay after each failure.
         [Int]$MaxTryCount = 20, 
 
-        #AD group containing accounts to exclude.
+        #AD group containing computers to exclude.
         [array]$ExclusionGroups 
     )
 
@@ -172,7 +172,7 @@ Function Disable-InactiveADAccounts {
                     #Get AD results
                     Import-Module ActiveDirectory
                     $Results = Get-ADComputer -Filter {Enabled -eq $True} -Server $DCName -Properties DistinguishedName,LastLogon,LastLogonTimestamp,whenCreated,Description -ErrorAction Stop
-                    $Results = $Results | Sort-Object -Property SamAccountName
+                    $Results = $Results | Sort-Object -Property SamComputerName
                     Return $Results
                 }
             } 
@@ -191,7 +191,7 @@ Function Disable-InactiveADAccounts {
         ForEach ($i in 0..(($DCnames.Count)-1)){
             If ($i -le (($DCnames.Count)-2)){
                 Write-Output ("Comparing results from " + $DCnames[$i] + " and " + $DCnames[$i+1] + "...")
-                $NotEqual = Compare-Object (Get-Variable -Name $DCnames[$i]).Value (Get-Variable -Name $DCnames[$i+1]).Value -Property SamAccountName
+                $NotEqual = Compare-Object (Get-Variable -Name $DCnames[$i]).Value (Get-Variable -Name $DCnames[$i+1]).Value -Property SamComputerName
 
                 If (!$NotEqual) {
                     $ComparisonResults += $True
@@ -292,7 +292,7 @@ Function Disable-InactiveADAccounts {
         }
 
         #If that computer's array contains a mismatch, bail. This should realistically never happen because we already compared the arrays.
-        If (($ComputerEntries.SamAccountName | Select-Object -Unique).Count -gt 1){
+        If (($ComputerEntries.SamComputerName | Select-Object -Unique).Count -gt 1){
             Throw "A computer mismatch at index $i has occurred. Aborting."
         }
 
@@ -327,7 +327,7 @@ Function Disable-InactiveADAccounts {
 
         #Create object for output array
         $OutputObj = [PSCustomObject]@{
-            SamAccountName=$ComputerEntries[0].SamAccountName
+            SamComputerName=$ComputerEntries[0].SamComputerName
             Enabled=$ComputerEntries[0].Enabled
             LastLogon=$TrueLastLogon
             WhenCreated=$whenCreated
@@ -342,7 +342,7 @@ Function Disable-InactiveADAccounts {
         #Append object to output array and output progress to console.
         $FullResults[$i] = $OutputObj
         $PercentComplete = [math]::Round((($i/$ComputerCount) * 100),2)
-        Write-Output ("Computer: " + $OutputObj.SamAccountName + " - Last logon: $TrueLastLogon ($DaysInactive day(s) inactivity) - $PercentComplete% complete.")
+        Write-Output ("Computer: " + $OutputObj.SamComputerName + " - Last logon: $TrueLastLogon ($DaysInactive day(s) inactivity) - $PercentComplete% complete.")
     }
 
     #Gets exlusions, error action is set to stop
@@ -350,29 +350,29 @@ Function Disable-InactiveADAccounts {
         $ComputerExclusions = @()
         ForEach ($ExclusionGroup in $ExclusionGroups){
             Write-Output "Getting `"$ExclusionGroup`" members..."
-            $ComputerExclusions += (Get-ADGroupMember -Identity $ExclusionGroup -ErrorAction Stop).SamAccountName
+            $ComputerExclusions += (Get-ADGroupMember -Identity $ExclusionGroup -ErrorAction Stop).SamComputerName
         }
     }
 
     #Filter
     Write-Output "Filtering computers..."
-    $FilteredComputersResults = $FullResults | Where-Object {$ComputerExclusions -notcontains $_.SamAccountName}
+    $FilteredComputersResults = $FullResults | Where-Object {$ComputerExclusions -notcontains $_.SamComputerName}
     $FullResults = $FullResults | Where-Object {$_ -ne $null}
 
     #For some reason compare-object is not working properly without specifying all properties. Don't know why. 
     $ExcludedComputersResults = Compare-Object $FilteredComputersResults $FullResults `
-    -Property SamAccountName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description | 
-    Select-Object SamAccountName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description
+    -Property SamComputerName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description | 
+    Select-Object SamComputerName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description
 
-    #Add to ComputersDisabled array for CSV report. Also disable and stamp accounts if ReportOnly is set to false (default).
+    #Add to ComputersDisabled array for CSV report. Also disable and stamp computers if ReportOnly is set to false (default).
     $InactiveComputersDisabled = @()
     If (!$ReportOnly){
         $FilteredComputersResults | ForEach-Object {
             If ($_.DaysInactive -ge $DaysThreshold){
-                Write-Output ("Disabling " + $_.SamAccountName + "...")
-                Disable-ADAccount -Identity $_.SamAccountName
+                Write-Output ("Disabling " + $_.SamComputerName + "...")
+                Disable-ADComputer -Identity $_.SamComputerName
                 $Date = "INACTIVE SINCE " + (Get-Date)
-                Set-ADComputer -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date}
+                Set-ADComputer -Identity $_.SamComputerName -Replace @{ExtensionAttribute3=$Date}
                 $InactiveComputersDisabled += $_
             }
         }
@@ -380,10 +380,10 @@ Function Disable-InactiveADAccounts {
     Else {
         $FilteredComputersResults | ForEach-Object {
             If ($_.DaysInactive -ge $DaysThreshold){
-                Write-Output ("Disabling " + $_.SamAccountName + "...")
-                Disable-ADAccount -Identity $_.SamAccountName -WhatIf
+                Write-Output ("Disabling " + $_.SamComputerName + "...")
+                Disable-ADComputer -Identity $_.SamComputerName -WhatIf
                 $Date = "INACTIVE SINCE " + (Get-Date)
-                Set-ADComputer -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf
+                Set-ADComputer -Identity $_.SamComputerName -Replace @{ExtensionAttribute3=$Date} -WhatIf
                 $InactiveComputersDisabled += $_
             }
         }
@@ -443,10 +443,10 @@ Function Wait-JobsWithProgress {
 }
 
 #Start logging.
-Start-Logging -LogDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -LogName "Disable-InactiveADAccounts" -LogRetentionDays 30
+Start-Logging -LogDirectory "C:\ScriptLogs\Disable-InactiveADComputers" -LogName "Disable-InactiveADComputers" -LogRetentionDays 30
 
 #Start function.
-. Disable-InactiveADAccounts -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -DaysThreshold 60 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -ExclusionGroup @("ServiceAccounts") -ReportOnly $True
+. Disable-InactiveADComputers -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -DaysThreshold 60 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADComputers" -ExclusionGroup @("ServiceAccts") -ReportOnly
 #Stop logging.
 Write-Output ("Stop time: " + (Get-Date))
 Stop-Transcript

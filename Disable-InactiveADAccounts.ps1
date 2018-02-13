@@ -100,7 +100,7 @@ Function Disable-InactiveADAccounts {
         [String]$From,
 
         #If $true, email report will be sent without disabling or stamping any AD accounts.
-        [Boolean]$ReportOnly = $False, 
+        [switch]$ReportOnly = $False,
 
         #SMTP server for sending reports.
         [Parameter(Mandatory=$true)]
@@ -446,7 +446,7 @@ Function Wait-JobsWithProgress {
 Start-Logging -LogDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -LogName "Disable-InactiveADAccounts" -LogRetentionDays 30
 
 #Start function.
-. Disable-InactiveADAccounts -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -ExclusionGroup @("ServiceAccounts") -ReportOnly $True
+. Disable-InactiveADAccounts -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -ExclusionGroup @("ServiceAccounts") -ReportOnly
 #Stop logging.
 Write-Output ("Stop time: " + (Get-Date))
 Stop-Transcript

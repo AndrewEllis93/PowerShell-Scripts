@@ -50,12 +50,15 @@ Function Enumerate-Access {
         Throw "Path was not reachable."
     }
 
+    #This part now has long (>260 character) path support, thanks to /u/vBurak 
+    #https://www.reddit.com/r/sysadmin/comments/7moj1w/there_was_some_interest_in_my_scripts_so_i/du18hf0/
     Write-Verbose "Getting file tree..."
+    $LiteralPath = "\\?\" + $Path
     If ($Depth){
-        $Tree = Get-Childitem $Path -recurse -Depth $Depth -Directory -ErrorAction
+        $Tree = Get-Childitem -LiteralPath $LiteralPath -Recurse -Depth $Depth -Directory -ErrorAction
     }
     Else {
-        $Tree = Get-Childitem $Path -recurse -Directory
+        $Tree = Get-Childitem -LiteralPath $LiteralPath -Recurse -Directory
     }
 
     $Output = [System.Collections.ArrayList]@()
@@ -68,7 +71,7 @@ Function Enumerate-Access {
     $Index = 0
     $TopLevelACL.Access.IdentityReference.Value | ForEach-Object {
         $OutputObj = [PSCustomObject]@{}
-        $OutputObj | Add-Member -Name FullName -MemberType NoteProperty -Value $FullName
+        $OutputObj | Add-Member -Name FullName -MemberType NoteProperty -Value $FullName.Replace('\\?\','')
         $OutputObj | Add-Member -Name Owner -MemberType NoteProperty -Value $TopLevelACL.Owner
         $OutputObj | Add-Member -Name IdentityReference -MemberType NoteProperty -Value ($TopLevelACL.Access.IdentityReference.Value[$Index])
         $OutputObj | Add-Member -Name FileSystemRights -MemberType NoteProperty -Value ($TopLevelACL.Access.FileSystemRights[$Index])
@@ -92,7 +95,7 @@ Function Enumerate-Access {
             $ACL.Access.IdentityReference.Value | ForEach-Object {
                 If ($ACL.Access.IsInherited[$Index] -eq $False){
                     $OutputObj = [PSCustomObject]@{}
-                    $OutputObj | Add-Member -Name FullName -MemberType NoteProperty -Value $FullName
+                    $OutputObj | Add-Member -Name FullName -MemberType NoteProperty -Value $FullName.Replace('\\?\','')
                     $OutputObj | Add-Member -Name Owner -MemberType NoteProperty -Value $ACL.Owner
                     $OutputObj | Add-Member -Name IdentityReference -MemberType NoteProperty -Value ($ACL.Access.IdentityReference.Value[$Index])
                     $OutputObj | Add-Member -Name FileSystemRights -MemberType NoteProperty -Value ($ACL.Access.FileSystemRights[$Index])
@@ -108,7 +111,7 @@ Function Enumerate-Access {
         Else {
             $ACL.Access.IdentityReference.Value | ForEach-Object {
                 $OutputObj = [PSCustomObject]@{}
-                $OutputObj | Add-Member -Name FullName -MemberType NoteProperty -Value $FullName
+                $OutputObj | Add-Member -Name FullName -MemberType NoteProperty -Value $FullName.Replace('\\?\','')
                 $OutputObj | Add-Member -Name Owner -MemberType NoteProperty -Value $ACL.Owner
                 $OutputObj | Add-Member -Name IdentityReference -MemberType NoteProperty -Value ($ACL.Access.IdentityReference.Value[$Index])
                 $OutputObj | Add-Member -Name FileSystemRights -MemberType NoteProperty -Value ($ACL.Access.FileSystemRights[$Index])
@@ -132,5 +135,5 @@ Function Enumerate-Access {
     Return $Output
 }
 
-$ACL = Enumerate-Access -Path "C:\Test"
-$ACL | Export-CSV C:\TestACL.csv -NoTypeInformation
+$ACL = Enumerate-Access -Path "C:\Crypto"
+$ACL | Export-CSV C:\users\acellis\TestACL.csv -NoTypeInformation -Encoding UTF8
