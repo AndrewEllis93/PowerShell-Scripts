@@ -9,7 +9,7 @@
 # Notes:
 # This finds the last logon for all AD accounts and disables any that have been inactive for X number of days (depending on what threshold you set). 
 # The difference with this script is that it gets the most accurate last logon available by comparing the results from all domain controllers. By default the lastlogontimestamp is only replicated every 14 days minus a random percentage of 5. This makes it much more accurate, but also it is a very slow. It also supports an exclusion AD group that you can put things like service accounts in to prevent them from being disabled. It will also email a report to the specified email addresses.
-# WARNING: THIS SCRIPT WILL OVERWRITE EXTENSIONATTRIBUTE3 FOR INACTIVE USERS, MAKE SURE YOU ARE NOT USING IT FOR ANYTHING ELSE
+# WARNING: THIS SCRIPT WILL OVERWRITE EXTENSIONATTRIBUTE3 FOR ALL USERS, MAKE SURE YOU ARE NOT USING IT FOR ANYTHING ELSE
 # This script is SLOW because it gets the most accurate last logon possible by comparing results from all DCs. By default the lastlogontimestamp is only replicated every 14 days minus a random percentage of 5.
 #
 ####################################################
