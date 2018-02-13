@@ -114,7 +114,7 @@ Function Disable-InactiveADAccounts {
         [Parameter(Mandatory=$true)]
         [Int]$UTCSkew, 
 
-        #Threshold of days of inactivity before disabling the user. Defaults to 30 days.
+        #Threshold of days of inactivity before disabling the computer. Defaults to 30 days.
         [Int]$DaysThreshold = 30, 
 
         #Where to export CSVs etc.
@@ -162,7 +162,7 @@ Function Disable-InactiveADAccounts {
         Get-Job | Remove-Job
 
         If ((!$ExistingResults -or $ExistingResults -contains $False) -or ($ComparisonResults -contains $False -or !$ComparisonResults)){
-            #Fetch AD users from each DC, add to named array
+            #Fetch AD computers from each DC, add to named array
             Write-Output ""
             Write-Output "Starting data retrieval jobs..."
 
@@ -171,7 +171,7 @@ Function Disable-InactiveADAccounts {
                     param($DCName)
                     #Get AD results
                     Import-Module ActiveDirectory
-                    $Results = Get-ADUser -Filter {Enabled -eq $True} -Server $DCName -Properties DistinguishedName,LastLogon,LastLogonTimestamp,whenCreated,Description -ErrorAction Stop
+                    $Results = Get-ADComputer -Filter {Enabled -eq $True} -Server $DCName -Properties DistinguishedName,LastLogon,LastLogonTimestamp,whenCreated,Description -ErrorAction Stop
                     $Results = $Results | Sort-Object -Property SamAccountName
                     Return $Results
                 }
@@ -277,37 +277,37 @@ Function Disable-InactiveADAccounts {
     #Get current time for comparison later. 
     $StartTime = Get-Date
 
-    #User count so we know how many times to loop.
-    $UserCount = (Get-Variable -Name $DCnames[0]).Value.Count
+    #Computer count so we know how many times to loop.
+    $ComputerCount = (Get-Variable -Name $DCnames[0]).Value.Count
 
     #Create results array of the same size
-    $FullResults = @($null) * $UserCount
+    $FullResults = @($null) * $ComputerCount
 
     #Loop through array indexes
-    ForEach ($i in 0..($UserCount -1)){
-        #Grab user object from each resultant array, make array of each user object
-        $UserEntries = @(@{}) * $DCnames.Count
+    ForEach ($i in 0..($ComputerCount -1)){
+        #Grab computer object from each resultant array, make array of each computer object
+        $ComputerEntries = @(@{}) * $DCnames.Count
         ForEach ($o in 0..($DCnames.Count -1)) {
-            $UserEntries[$o] = (Get-Variable -Name $DCnames[$o]).Value[$i]
+            $ComputerEntries[$o] = (Get-Variable -Name $DCnames[$o]).Value[$i]
         }
 
-        #If that user's array contains a mismatch, bail. This should realistically never happen because we already compared the arrays.
-        If (($UserEntries.SamAccountName | Select-Object -Unique).Count -gt 1){
-            Throw "A user mismatch at index $i has occurred. Aborting."
+        #If that computer's array contains a mismatch, bail. This should realistically never happen because we already compared the arrays.
+        If (($ComputerEntries.SamAccountName | Select-Object -Unique).Count -gt 1){
+            Throw "A computer mismatch at index $i has occurred. Aborting."
         }
 
         #Find most recent LastLogon, whenCreated, and LastLogonTimestamps, cast to datetimes.
-        If ($UserEntries.LastLogon){
-            [datetime]$LastLogon = [datetime]::FromFileTimeUtc(($UserEntries.LastLogon | Measure-Object -Maximum).Maximum)
+        If ($ComputerEntries.LastLogon){
+            [datetime]$LastLogon = [datetime]::FromFileTimeUtc(($ComputerEntries.LastLogon | Measure-Object -Maximum).Maximum)
             $LastLogon = $LastLogon.AddHours($UTCSkew)
             [datetime]$TrueLastLogon = $LastLogon
         }
         Else {[datetime]$LastLogon = 0; $TrueLastLogon = 0} 
 
-        [datetime]$whenCreated = $UserEntries[0].whenCreated
+        [datetime]$whenCreated = $ComputerEntries[0].whenCreated
 
-        If ($UserEntries.LastLogonTimestamp){
-            [datetime]$LastLogonTimestamp = [datetime]::FromFileTimeUtc(($UserEntries.LastLogonTimestamp | Measure-Object -Maximum).Maximum)
+        If ($ComputerEntries.LastLogonTimestamp){
+            [datetime]$LastLogonTimestamp = [datetime]::FromFileTimeUtc(($ComputerEntries.LastLogonTimestamp | Measure-Object -Maximum).Maximum)
             $LastLogonTimestamp = $LastLogonTimestamp.AddHours($UTCSkew)
         }
         Else {[datetime]$LastLogonTimestamp = 0}
@@ -327,73 +327,73 @@ Function Disable-InactiveADAccounts {
 
         #Create object for output array
         $OutputObj = [PSCustomObject]@{
-            SamAccountName=$UserEntries[0].SamAccountName
-            Enabled=$UserEntries[0].Enabled
+            SamAccountName=$ComputerEntries[0].SamAccountName
+            Enabled=$ComputerEntries[0].Enabled
             LastLogon=$TrueLastLogon
             WhenCreated=$whenCreated
             DaysInactive=$DaysInactive
-            GivenName=$UserEntries[0].GivenName
-            Surname=$UserEntries[0].SurName
-            Name=$UserEntries[0].Name
-            DistinguishedName=$UserEntries[0].DistinguishedName
-            Description=$UserEntries[0].Description
+            GivenName=$ComputerEntries[0].GivenName
+            Surname=$ComputerEntries[0].SurName
+            Name=$ComputerEntries[0].Name
+            DistinguishedName=$ComputerEntries[0].DistinguishedName
+            Description=$ComputerEntries[0].Description
         }  
 
         #Append object to output array and output progress to console.
         $FullResults[$i] = $OutputObj
-        $PercentComplete = [math]::Round((($i/$UserCount) * 100),2)
-        Write-Output ("User: " + $OutputObj.SamAccountName + " - Last logon: $TrueLastLogon ($DaysInactive day(s) inactivity) - $PercentComplete% complete.")
+        $PercentComplete = [math]::Round((($i/$ComputerCount) * 100),2)
+        Write-Output ("Computer: " + $OutputObj.SamAccountName + " - Last logon: $TrueLastLogon ($DaysInactive day(s) inactivity) - $PercentComplete% complete.")
     }
 
     #Gets exlusions, error action is set to stop
     If ($ExclusionGroups){
-        $UserExclusions = @()
+        $ComputerExclusions = @()
         ForEach ($ExclusionGroup in $ExclusionGroups){
             Write-Output "Getting `"$ExclusionGroup`" members..."
-            $UserExclusions += (Get-ADGroupMember -Identity $ExclusionGroup -ErrorAction Stop).SamAccountName
+            $ComputerExclusions += (Get-ADGroupMember -Identity $ExclusionGroup -ErrorAction Stop).SamAccountName
         }
     }
 
     #Filter
-    Write-Output "Filtering users..."
-    $FilteredUsersResults = $FullResults | Where-Object {$UserExclusions -notcontains $_.SamAccountName}
+    Write-Output "Filtering computers..."
+    $FilteredComputersResults = $FullResults | Where-Object {$ComputerExclusions -notcontains $_.SamAccountName}
     $FullResults = $FullResults | Where-Object {$_ -ne $null}
 
     #For some reason compare-object is not working properly without specifying all properties. Don't know why. 
-    $ExcludedUsersResults = Compare-Object $FilteredUsersResults $FullResults `
+    $ExcludedComputersResults = Compare-Object $FilteredComputersResults $FullResults `
     -Property SamAccountName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description | 
     Select-Object SamAccountName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description
 
-    #Add to UsersDisabled array for CSV report. Also disable and stamp accounts if ReportOnly is set to false (default).
-    $InactiveUsersDisabled = @()
+    #Add to ComputersDisabled array for CSV report. Also disable and stamp accounts if ReportOnly is set to false (default).
+    $InactiveComputersDisabled = @()
     If (!$ReportOnly){
-        $FilteredUsersResults | ForEach-Object {
+        $FilteredComputersResults | ForEach-Object {
             If ($_.DaysInactive -ge $DaysThreshold){
                 Write-Output ("Disabling " + $_.SamAccountName + "...")
                 Disable-ADAccount -Identity $_.SamAccountName
                 $Date = "INACTIVE SINCE " + (Get-Date)
-                Set-ADUser -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date}
-                $InactiveUsersDisabled += $_
+                Set-ADComputer -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date}
+                $InactiveComputersDisabled += $_
             }
         }
     }
     Else {
-        $FilteredUsersResults | ForEach-Object {
+        $FilteredComputersResults | ForEach-Object {
             If ($_.DaysInactive -ge $DaysThreshold){
                 Write-Output ("Disabling " + $_.SamAccountName + "...")
                 Disable-ADAccount -Identity $_.SamAccountName -WhatIf
                 $Date = "INACTIVE SINCE " + (Get-Date)
-                Set-ADUser -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf
-                $InactiveUsersDisabled += $_
+                Set-ADComputer -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf
+                $InactiveComputersDisabled += $_
             }
         }
     }
 
-    #Filtered users - add to UsersNotDisabled array for CSV report
-    $ExcludedInactiveUsers = @()
-    $ExcludedUsersResults | ForEach-Object {
+    #Filtered computers - add to ComputersNotDisabled array for CSV report
+    $ExcludedInactiveComputers = @()
+    $ExcludedComputersResults | ForEach-Object {
         If ($_.DaysInactive -ge $DaysThreshold){
-            $ExcludedInactiveUsers += $_
+            $ExcludedInactiveComputers += $_
         }
     }
 
@@ -403,16 +403,16 @@ Function Disable-InactiveADAccounts {
     }
 
     #Form the paths for the output files
-    $InactiveUsersDisabledCSV = $OutputDirectory + "\InactiveUsers-Disabled.csv"
-    $UsersNotDisabledCSV = $OutputDirectory + "\InactiveUsers-Excluded.csv"
+    $InactiveComputersDisabledCSV = $OutputDirectory + "\InactiveComputers-Disabled.csv"
+    $ComputersNotDisabledCSV = $OutputDirectory + "\InactiveComputers-Excluded.csv"
 
     #Export the CSVs
-    $InactiveUsersDisabled | Export-CSV $InactiveUsersDisabledCSV -NoTypeInformation -Force
-    $ExcludedInactiveUsers | Export-CSV $UsersNotDisabledCSV -NoTypeInformation -Force
+    $InactiveComputersDisabled | Export-CSV $InactiveComputersDisabledCSV -NoTypeInformation -Force
+    $ExcludedInactiveComputers | Export-CSV $ComputersNotDisabledCSV -NoTypeInformation -Force
 
     #Send email with CSVs as attachments
     Write-Output "Sending email..."
-    Send-MailMessage -Attachments @($InactiveUsersDisabledCSV,$UsersNotDisabledCSV) -From $From -SmtpServer $SMTPServer -To $To -Subject $Subject
+    Send-MailMessage -Attachments @($InactiveComputersDisabledCSV,$ComputersNotDisabledCSV) -From $From -SmtpServer $SMTPServer -To $To -Subject $Subject
 
     <#
     # This is here if you want to use it in conjunction with my Move-Disabled script. Just uncomment and replace with your scheduled task path. 
@@ -446,7 +446,7 @@ Function Wait-JobsWithProgress {
 Start-Logging -LogDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -LogName "Disable-InactiveADAccounts" -LogRetentionDays 30
 
 #Start function.
-. Disable-InactiveADAccounts -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -ExclusionGroup @("ServiceAccounts") -ReportOnly $True
+. Disable-InactiveADAccounts -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -DaysThreshold 60 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADAccounts" -ExclusionGroup @("ServiceAccounts") -ReportOnly $True
 #Stop logging.
 Write-Output ("Stop time: " + (Get-Date))
 Stop-Transcript

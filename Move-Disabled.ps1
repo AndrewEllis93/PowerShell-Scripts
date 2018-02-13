@@ -55,7 +55,8 @@ Function Move-Disabled {
         [Parameter(Mandatory=$true)][string]$ParentOU,
         [array]$ExclusionUserGroups,
         [switch]$ReportOnly = $False,
-        [int]$InactivityDays = 30,
+        [int]$UserInactivityDays = 30,
+        [int]$ComputerInactivityDays = 30,
         [array]$ExclusionOUs
     )
 
@@ -219,7 +220,7 @@ Function Move-Disabled {
                 #If auto-disabled because of inactivity (Disable-InactiveADAccounts script), add extra days to account for that.
                 ElseIf ($DisabledOUUser.ExtensionAttribute3 -like "INACTIVE SINCE*"){
                     $DateDisabled = [datetime]($DisabledOUUser.ExtensionAttribute3.Replace('INACTIVE SINCE ',''))
-                    $DaysDisabled = (New-TimeSpan -Start $DateDisabled.AddDays(($InactivityDays * -1)) -End (Get-Date)).Days
+                    $DaysDisabled = (New-TimeSpan -Start $DateDisabled.AddDays(($UserInactivityDays * -1)) -End (Get-Date)).Days
                 }
                 Else {Write-Error ($DisabledOUUser.SamAccountName + " has an invalid disable date in ExtensionAttribute3.")}
 
@@ -273,8 +274,17 @@ Function Move-Disabled {
                 }
 
                 #Extracts the date disabled for comparison.
-                $DateDisabled = [datetime]($DisabledOUComputer.ExtensionAttribute3.Replace('DISABLED ON ',''))
-                $DaysDisabled = (New-TimeSpan -Start $DateDisabled -End (Get-Date)).Days
+                #If disabled by hand, count from the disable date
+                If ($DisabledOUComputer.ExtensionAttribute3 -like "DISABLED ON*"){
+                    $DateDisabled = [datetime]($DisabledOUComputer.ExtensionAttribute3.Replace('DISABLED ON ',''))
+                    $DaysDisabled = (New-TimeSpan -Start $DateDisabled -End (Get-Date)).Days
+                }
+                #If auto-disabled because of inactivity (Disable-InactiveADAccounts script), add extra days to account for that.
+                ElseIf ($DisabledOUComputer.ExtensionAttribute3 -like "INACTIVE SINCE*"){
+                    $DateDisabled = [datetime]($DisabledOUComputer.ExtensionAttribute3.Replace('INACTIVE SINCE ',''))
+                    $DaysDisabled = (New-TimeSpan -Start $DateDisabled.AddDays(($ComputerInactivityDays * -1)) -End (Get-Date)).Days
+                }
+                Else {Write-Error ($DisabledOUComputer.SamAccountName + " has an invalid disable date in ExtensionAttribute3.")}
 
                 #Increment through OUs
                 If ($DaysDisabled -ge 30 -and $DaysDisabled -le 180 -and $DisabledOUComputer.DistinguishedName -notlike "*OU=30-180 Days,OU=Computers,$ParentOU"){
@@ -408,7 +418,7 @@ Function Start-Logging{
 Start-Logging -LogDirectory "C:\Logs\Move-DisabledLog" -LogName "Move-DisabledLog" -LogRetentionDays 30
 
 #Call function
-Move-Disabled -ParentOU "OU=Disabled Objects,DC=domain,DC=local" -InactivityDays 30 -ReportOnly -ExclusionUserGroups @('ServiceAccts') -ExclusionOUs @('OU=Test,DC=domain,DC=local','OU=Test2,DC=domain,DC=local')
+Move-Disabled -ParentOU "OU=Disabled Objects,DC=domain,DC=local" -UserInactivityDays 30 -ComputerInactivityDays 60 -ReportOnly -ExclusionUserGroups @('ServiceAccts') -ExclusionOUs @('OU=Test,DC=domain,DC=local','OU=Test2,DC=domain,DC=local')
 
 #Stop logging
 Stop-Transcript
