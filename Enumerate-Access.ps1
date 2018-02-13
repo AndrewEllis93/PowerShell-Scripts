@@ -135,5 +135,5 @@ Function Enumerate-Access {
     Return $Output
 }
 
-$ACL = Enumerate-Access -Path "C:\Crypto"
-$ACL | Export-CSV C:\users\acellis\TestACL.csv -NoTypeInformation -Encoding UTF8
+$ACL = Enumerate-Access -Path "C:\Test"
+$ACL | Export-CSV C:\TestACL.csv -NoTypeInformation -Encoding UTF8
