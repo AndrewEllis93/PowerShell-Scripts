@@ -26,6 +26,7 @@ Function Start-Logging {
     https://github.com/AndrewEllis93/PowerShell-Scripts
 
     .NOTES
+    Author: Andrew Ellis
     #>
     Param (
         [Parameter(Mandatory=$true)]
@@ -83,9 +84,11 @@ Function Send-Notice
     Send-notice - sends emails to users based on days before password expiration.  Requires user email address, days before password expiration, password expiration date, and user account name variables.
     Notices are only sent if days before password is due to expire are equal to 1,2,3,7, or 14.
     
+    .LINK
+    https://github.com/AndrewEllis93/PowerShell-Scripts
+
     .NOTES
-    Author : Andrew Ellis
-    GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+    Author: Andrew Ellis
     #>
 
     param(
@@ -140,12 +143,11 @@ Function Send-AllNotices {
     .EXAMPLE
     Send-AllNotices -ADGroupExclusion "Test Group" -MailFrom "noreply@email.com" -smtpserver "server.domain.local"
     
+    .LINK
+    https://github.com/AndrewEllis93/PowerShell-Scripts
+
     .NOTES
-    Title: Send-AllNotices
-    Date Created : 2017-05-01   
-    Last Edit: 2017-12-29
-    Author : Andrew Ellis
-    GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+    Author: Andrew Ellis
     #>
     
     Param (

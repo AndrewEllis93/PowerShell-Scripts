@@ -38,10 +38,10 @@ Function Discover-Shares {
     Find-Shares -DomainController DC1 -FilterShares $True
 
     .LINK
+    https://github.com/AndrewEllis93/PowerShell-Scripts
 
     .NOTES
-    Author : Andrew Ellis
-    GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+    Author: Andrew Ellis
     #>
 
     param([boolean]$FilterShares = $True,

@@ -27,6 +27,7 @@ Function Discover-DriveSpace {
     https://github.com/AndrewEllis93/PowerShell-Scripts
 
     .NOTES
+    Author: Andrew Ellis
     #>
 
     Param (

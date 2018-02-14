@@ -28,8 +28,7 @@ Function Enumerate-Access {
     https://github.com/AndrewEllis93/PowerShell-Scripts
 
     .NOTES
-    Author : Andrew Ellis
-    GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+    Author: Andrew Ellis
     #>
 
     [cmdletbinding()]

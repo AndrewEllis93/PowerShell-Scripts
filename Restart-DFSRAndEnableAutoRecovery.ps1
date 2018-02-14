@@ -20,9 +20,11 @@ Function Restart-DFSRAndEnableAutoRecovery {
     .EXAMPLE
     Restart-DFSRAndEnableAutoRecovery
     
+    .LINK
+    https://github.com/AndrewEllis93/PowerShell-Scripts
+
     .NOTES
-    Author : Andrew Ellis
-    GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
+    Author: Andrew Ellis
     #>
 
     Write-Output "Getting list of DCs..."
@@ -53,6 +55,7 @@ Function Start-Logging {
     https://github.com/AndrewEllis93/PowerShell-Scripts
 
     .NOTES
+    Author: Andrew Ellis
     #>
     Param (
         [Parameter(Mandatory=$true)]
