@@ -1,30 +1,68 @@
 #EDITED TO ONLY SEND EMAIL ON FAILURES/WARNINGS TO HELP CUT DOWN ON SPAM
-#Sets screen buffer from 120 width to 500 width. This stops truncation in the log.
-$pshost = get-host
-$pswindow = $pshost.ui.rawui
+Function Start-Logging {
+    <#
+    .SYNOPSIS
+    This function starts a transcript in the specified directory and cleans up any files older than the specified number of days. 
 
-$newsize = $pswindow.buffersize
-$newsize.height = 3000
-$newsize.width = 500
-$pswindow.buffersize = $newsize
+    .DESCRIPTION
+    Please ensure that the log directory specified is empty, as this function will clean that folder.
 
-$newsize = $pswindow.windowsize
-$newsize.height = 50
-$newsize.width = 500
-$pswindow.windowsize = $newsize
+    .EXAMPLE
+    Start-Logging -LogDirectory "C:\ScriptLogs\LogFolder" -LogName $LogName -LogRetentionDays 30
 
-#Log Parameters.
-$LogDirectory =  "C:\Temp"
-$LogRetentionDays = 30
+    .LINK
+    https://github.com/AndrewEllis93/PowerShell-Scripts
 
-#Starts logging.
-New-Item -ItemType directory -Path $LogDirectory -Force | Out-Null
-$Today = Get-Date -Format M-d-y
-Start-Transcript -Append -Path $LogDirectory\ADHealthCheck.$Today.log | Out-Null
+    .NOTES
+    #>
+    Param (
+        [Parameter(Mandatory=$true)]
+        [String]$LogDirectory,
+        [Parameter(Mandatory=$true)]
+        [String]$LogName,
+        [Parameter(Mandatory=$true)]
+        [Int]$LogRetentionDays
+    )
 
-#Purges log files older than X days
-$RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
-Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -notlike "*.log*"} | Remove-Item -Force
+   #Sets screen buffer from 120 width to 500 width. This stops truncation in the log.
+   $ErrorActionPreference = 'SilentlyContinue'
+   $pshost = Get-Host
+   $pswindow = $pshost.UI.RawUI
+
+   $newsize = $pswindow.BufferSize
+   $newsize.Height = 3000
+   $newsize.Width = 500
+   $pswindow.BufferSize = $newsize
+
+   $newsize = $pswindow.WindowSize
+   $newsize.Height = 50
+   $newsize.Width = 500
+   $pswindow.WindowSize = $newsize
+   $ErrorActionPreference = 'Continue'
+
+   #Remove the trailing slash if present. 
+   If ($LogDirectory -like "*\") {
+       $LogDirectory = $LogDirectory.SubString(0,($LogDirectory.Length-1))
+   }
+
+   #Create log directory if it does not exist already
+   If (!(Test-Path $LogDirectory)) {
+       New-Item -ItemType Directory $LogDirectory -Force | Out-Null
+   }
+
+   $Today = Get-Date -Format M-d-y
+   Start-Transcript -Append -Path ($LogDirectory + "\" + $LogName + "." + $Today + ".log") | Out-Null
+
+   #Shows proper date in log.
+   Write-Output ("Start time: " + (Get-Date))
+
+   #Purges log files older than X days
+   $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
+   Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -like "*.log"} | Remove-Item -Force
+} 
+
+#Start logging
+Start-Logging -LogDirectory "C:\ScriptLogs\ADHealthCheck" -LogName "ADHealthCheckLog" -LogRetentionDays 30
 
 #############################################################################
 #       Author: Vikas Sukhija
@@ -36,7 +74,7 @@ Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsConta
 #############################################################################
 ###########################Define Variables##################################
 
-$reportpath = "C:\TaskScheduler\ADReport.htm" 
+$reportpath = "C:\ScriptLogs\ADHealthCheck\ADReport.htm" 
 
 if((test-path $reportpath) -like $false)
 {

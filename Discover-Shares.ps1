@@ -40,9 +40,6 @@ Function Discover-Shares {
     .LINK
 
     .NOTES
-    Title: Discover-Shares
-    Date Created : 2017-10-31
-    Last Edit: 2017-12-29
     Author : Andrew Ellis
     GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
     #>

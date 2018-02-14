@@ -2,7 +2,7 @@
 #
 # Title: Move-Disabled
 # Date Created : 2017-12-28
-# Last Edit: 2018-01-08
+# Last Edit: 2018-02-14
 # Author : Andrew Ellis
 # GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
 #
@@ -44,9 +44,6 @@ Function Move-Disabled {
     https://github.com/AndrewEllis93/PowerShell-Scripts
 
     .NOTES
-    Title: Move-Disabled
-    Date Created : 2017-12-28
-    Last Edit: 2018-01-08
     Author : Andrew Ellis
     GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
     #>
@@ -119,7 +116,7 @@ Function Move-Disabled {
             Write-Output ("Setting info field for user: " + $DisabledUser.SamAccountName + "...")
             #Gets the parent OU.
             $OU = $DisabledUser.DistinguishedName.Split(',',2)[1]
-            If ($DisabledUser.Info -eq $null -or $DisabledUser.Info -eq ""){
+            If ([string]::IsNullOrWhiteSpace($DisabledUser.Info)){
                 $NewInfo = "OLD OU: " + $OU
             }
             Else {
@@ -132,8 +129,8 @@ Function Move-Disabled {
                 Set-ADUser -Identity $DisabledUser.SamAccountName -Replace @{info=$NewInfo}
             }
 
-            #Sets ExtensionAttribute3 for the date of disablement if not already set. 
-            If ($DisabledUser.ExtensionAttribute3 -notlike "*DISABLED*" -and $DisabledUser.ExtensionAttribute3 -notlike "*INACTIVE*"){
+            #Sets ExtensionAttribute3 for the date of disablement.
+            If ($DisabledUser.ExtensionAttribute3 -notlike "INACTIVE*"){
                 $Date = "DISABLED ON " + (Get-Date)
                 Write-Output ("Setting ExtensionAttribute3 for user: " + $DisabledUser.SamAccountName + "...")
                 If ($ReportOnly) {
@@ -158,8 +155,12 @@ Function Move-Disabled {
         ForEach ($DisabledComputer in $DisabledComputers){
         #Moves the Computer.
             Write-Output ("Moving computer: " + $DisabledComputer.SamAccountName + "...")
-            If ($ReportOnly) {Move-ADObject -Identity $DisabledComputer.DistinguishedName -TargetPath "OU=0-30 Days,OU=Computers,$ParentOU" -WhatIf}
-            Else {Move-ADObject -Identity $DisabledComputer.DistinguishedName -TargetPath "OU=0-30 Days,OU=Computers,$ParentOU"}
+            If ($ReportOnly) {
+                Move-ADObject -Identity $DisabledComputer.DistinguishedName -TargetPath "OU=0-30 Days,OU=Computers,$ParentOU" -WhatIf
+            }
+            Else {
+                Move-ADObject -Identity $DisabledComputer.DistinguishedName -TargetPath "OU=0-30 Days,OU=Computers,$ParentOU"
+            }
             $MovedComputers++
 
             #Sets the description (notes) field with the old OU.
@@ -167,17 +168,29 @@ Function Move-Disabled {
             Write-Output ("Setting Description field for computer: " + $DisabledComputer.SamAccountName + "...")
             #Gets the parent OU.
             $OU = $DisabledComputer.DistinguishedName.Split(',',2)[1]
-            If ($DisabledComputer.Description -eq $null -or $DisabledComputer.Description -eq ""){$NewDescription = "OLD OU: " + $OU}
-            Else{$NewDescription = "OLD OU: " + $OU + " | " + $DisabledComputer.Description}
-            If ($ReportOnly){Set-ADComputer -Identity $DisabledComputer.SamAccountName -Replace @{Description=$NewDescription} -WhatIf}
-            Else {Set-ADComputer -Identity $DisabledComputer.SamAccountName -Replace @{Description=$NewDescription}}
+            If ([string]::IsNullOrWhiteSpace($DisabledComputer.Description)){
+                $NewDescription = "OLD OU: " + $OU
+            }
+            Else{
+                $NewDescription = "OLD OU: " + $OU + " | " + $DisabledComputer.Description
+            }
+            If ($ReportOnly){
+                Set-ADComputer -Identity $DisabledComputer.SamAccountName -Replace @{Description=$NewDescription} -WhatIf
+            }
+            Else {
+                Set-ADComputer -Identity $DisabledComputer.SamAccountName -Replace @{Description=$NewDescription}
+            }
 
-            #Sets ExtensionAttribute3 for the date of disablement if not already set. 
-            If ($DisabledComputer.ExtensionAttribute3 -notlike "*DISABLED*" -and $DisabledComputer.ExtensionAttribute3 -notlike "*INACTIVE*"){
+            #Sets ExtensionAttribute3 for the date of disablement.
+            If ($DisabledComputer.ExtensionAttribute3 -notlike "INACTIVE*"){
                 $Date = "DISABLED ON " + (Get-Date)
                 Write-Output ("Setting ExtensionAttribute3 for computer: " + $DisabledComputer.SamAccountName + "...")
-                If ($ReportOnly) {Set-ADComputer -Identity $DisabledComputer.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf}
-                Else {Set-ADComputer -Identity $DisabledComputer.SamAccountName -Replace @{ExtensionAttribute3=$Date}}
+                If ($ReportOnly) {
+                    Set-ADComputer -Identity $DisabledComputer.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf
+                }
+                Else {
+                    Set-ADComputer -Identity $DisabledComputer.SamAccountName -Replace @{ExtensionAttribute3=$Date}
+                }
             }
         }
 
@@ -185,8 +198,8 @@ Function Move-Disabled {
         Write-Host ""
         Write-Output "OU INCREMENTATION:"
         #Gets objects in the disabled OU
-        $DisabledOUUsers = Get-ADUser -Filter * -SearchBase $ParentOU -Properties ExtensionAttribute3,DistinguishedName,SamAccountName
-        $DisabledOUComputers = Get-ADComputer -Filter * -SearchBase $ParentOU -Properties ExtensionAttribute3,DistinguishedName,SamAccountName
+        $DisabledOUUsers = Get-ADUser -Filter * -SearchBase $ParentOU -Properties ExtensionAttribute3,DistinguishedName,SamAccountName,Enabled | Where-Object {!$_.Enabled}
+        $DisabledOUComputers = Get-ADComputer -Filter * -SearchBase $ParentOU -Properties ExtensionAttribute3,DistinguishedName,SamAccountName,Enabled | Where-Object {!$_.Enabled}
 
         #USERS
             #Declares counts for output.
@@ -196,7 +209,7 @@ Function Move-Disabled {
             #Loops through users and checks if older than 30 days.
             ForEach ($DisabledOUUser in $DisabledOUUsers){
                 #Sets the date disabled if not already set
-                If ($DisabledOUUser.ExtensionAttribute3 -eq "" -or $DisabledOUUser.ExtensionAttribute3 -eq $null){
+                If ([string]::IsNullOrWhiteSpace($DisabledOUUser.ExtensionAttribute3) -or $DisabledOUUser.ExtensionAttribute3 -like "RE-ENABLED*"){
                     Write-Output ("Setting ExtensionAttribute 3 for user: " + $DisabledOUUser.SamAccountName + " (user was in disabled objects OU but did not have a disabled date.)")
 
                     $Date = "DISABLED ON " + (Get-Date)
@@ -258,7 +271,7 @@ Function Move-Disabled {
             #Loops through computers and checks if older than 90 days.
             ForEach ($DisabledOUComputer in $DisabledOUComputers){
                 #Sets the date disabled if not already set
-                If ($DisabledOUComputer.ExtensionAttribute3 -eq "" -or $DisabledOUComputer.ExtensionAttribute3 -eq $null){
+                If ([string]::IsNullOrWhiteSpace($DisabledOUComputer.ExtensionAttribute3) -or $DisabledOUComputer.ExtensionAttribute3 -like "RE-ENABLED*"){
                     Write-Output ("Setting ExtensionAttribute 3 for Computer: " + $DisabledOUComputer.SamAccountName + " (computer was in disabled objects OU but did not have a disabled date.)")
 
                     $Date = "DISABLED ON " + (Get-Date)
@@ -313,112 +326,139 @@ Function Move-Disabled {
 
     #SUMMARY OUTPUT
         #Writes the counts of what was modified etc.
-        Write-Output "TOTALS:"
+        Write-Output 'TOTALS:'
         $MovedUsers = $MovedUsers.tostring()
-        Write-Output ($MovedUsers + " users were moved to the 0-30 Days OU.")
+        Write-Output ($MovedUsers + ' user(s) moved to the "0-30 Days" OU.')
         $MovedComputers = $MovedComputers.tostring()
-        Write-Output ($MovedComputers + " computers were moved to the 0-30 Days OU.")
-        Write-Output ""
+        Write-Output ($MovedComputers + ' computer(s) moved to the "0-30 Days" OU.')
+        Write-Output ''
         $30to180DayMovedUsers = $30to180DayMovedUsers.tostring()
-        Write-Output ($30to180DayMovedUsers + " users were moved to the 30-180 Days OU.")
+        Write-Output ($30to180DayMovedUsers + ' user(s) moved to the "30-180 Days" OU.')
         $30to180DayMovedComputers = $30to180DayMovedComputers.tostring()
-        Write-Output ($30to180DayMovedComputers + " computers were moved to the 30-180 Days OU.")
-        Write-Output ""
+        Write-Output ($30to180DayMovedComputers + ' computer(s) moved to the "30-180 Days" OU.')
+        Write-Output ''
         $180DayMovedUsers = $180DayMovedUsers.tostring()
-        Write-Output ($180DayMovedUsers + " users were moved to the Over 180 Days OU.")
+        Write-Output ($180DayMovedUsers + ' user(s) moved to the "Over 180 Days" OU.')
         $180DayMovedComputers = $180DayMovedComputers.tostring()
-        Write-Output ($180DayMovedComputers + " computers were moved to the Over 180 Days OU.")
-        Write-Output ""
+        Write-Output ($180DayMovedComputers + ' computer(s) moved to the "Over 180 Days" OU.')
+        Write-Output ''
 
-    #ATTRIBUTE CLEANUP
-        #Gets all AD objects outside of the "disabled objects" OU with ExtensionAttribute3 set and clears it.
-        Write-Output ""
-        Write-Output "ATTRIBUTE CLEANUP:"
-        Write-Output "Getting non-disabled objects with ExtensionAttribute3 set..."
-        $NonDisabledUsers = Get-ADUser -Filter * -Properties DistinguishedName,ExtensionAttribute3,SamAccountName,Enabled | Where-Object {`
-            $_.DistinguishedName -NotLike "*$ParentOU" -and
-            $_.Enabled -eq $True -and
-            $_.ExtensionAttribute3 -ne "" -and
-            $_.ExtensionAttribute3 -ne $null
-        }
-        $NonDisabledComputers = Get-ADComputer -Filter * -Properties DistinguishedName,ExtensionAttribute3,SamAccountName,Enabled | Where-Object {`
-            $_.DistinguishedName -NotLike "*$ParentOU" -and
-            $_.Enabled -eq $True -and
-            $_.ExtensionAttribute3 -ne "" -and
-            $_.ExtensionAttribute3 -ne $null
-        }
+        #ATTRIBUTE CLEANUP
+            #Gets all AD objects with ExtensionAttribute3 incorrectly set, and clears it."
+            Write-Output ""
+            Write-Output "ATTRIBUTE CLEANUP:"
+            Write-Output "Finding enabled users with incorrect ExtensionAttribute3 attributes..."
 
-        Write-Output (($NonDisabledUsers.SamAccountName.Count).ToString() + " users were found.")
-        Write-Output (($NonDisabledComputers.SamAccountName.Count).ToString() + " computers were found.")
+            $MalformedUsers = Get-ADUser -Filter * -Properties DistinguishedName,ExtensionAttribute3,SamAccountName,Enabled | Where-Object {
+                $_.DistinguishedName -NotLike "*$ParentOU" -and
+                $_.Enabled -eq $True -and
+                ![string]::IsNullOrEmpty($_.ExtensionAttribute3) -and 
+                $_.ExtensionAttribute3 -notlike "DISABLED ON*" -and
+                $_.ExtensionAttribute3 -notlike "INACTIVE SINCE*" -and
+                $_.ExtensionAttribute3 -notlike "RE-ENABLED ON*"
+            }
+            $MalformedComputers = Get-ADComputer -Filter * -Properties DistinguishedName,ExtensionAttribute3,SamAccountName,Enabled | Where-Object {
+                $_.DistinguishedName -NotLike "*$ParentOU" -and
+                $_.Enabled -eq $True -and
+                ![string]::IsNullOrEmpty($_.ExtensionAttribute3) -and 
+                $_.ExtensionAttribute3 -notlike "DISABLED ON*" -and
+                $_.ExtensionAttribute3 -notlike "INACTIVE SINCE*" -and
+                $_.ExtensionAttribute3 -notlike "RE-ENABLED ON*"
+            }
 
-        ForEach ($NonDisabledUser in $NonDisabledUsers){
-            Write-Output ("Clearing ExtensionAttribute3 for user: " + $NonDisabledUser.SamAccountName)
-            If ($ReportOnly){
-                Set-ADUser -Identity $NonDisabledUser.SamAccountName -Clear ExtensionAttribute3 -WhatIf
-            }
-            Else {
-                Set-ADUser -Identity $NonDisabledUser.SamAccountName -Clear ExtensionAttribute3
-            }
-        }
+            Write-Output (($MalformedUsers.SamAccountName.Count).ToString() + " users were found.")
+            Write-Output (($MalformedComputers.SamAccountName.Count).ToString() + " computers were found.")
 
-        ForEach ($NonDisabledComputer in $NonDisabledComputers){
-            Write-Output ("Clearing ExtensionAttribute3 for computer: " + $NonDisabledComputer.SamAccountName)
-            If ($ReportOnly) {
-                Set-ADComputer -Identity $NonDisabledComputer.SamAccountName -Clear ExtensionAttribute3 -WhatIf
+            ForEach ($MalformedUser in $MalformedUsers){
+                Write-Output ("Clearing ExtensionAttribute3 for " + $MalformedUser.SamAccountName + "...")
+                If ($ReportOnly){
+                    Set-ADUser -Identity $MalformedUser.SamAccountName -Clear ExtensionAttribute3 -WhatIf
+                }
+                Else {
+                    Set-ADUser -Identity $MalformedUser.SamAccountName -Clear ExtensionAttribute3
+                }
             }
-            Else {
-                Set-ADComputer -Identity $NonDisabledComputer.SamAccountName -Clear ExtensionAttribute3
+
+            ForEach ($MalformedComputer in $MalformedComputers){
+                Write-Output ("Clearing ExtensionAttribute3 for " + $MalformedComputer.SamAccountName + "...")
+                If ($ReportOnly){
+                    Set-ADComputer -Identity $MalformedComputer.SamAccountName -Clear ExtensionAttribute3 -WhatIf
+                }
+                Else {
+                    Set-ADComputer -Identity $MalformedComputer.SamAccountName -Clear ExtensionAttribute3
+                }
             }
-        }
 }
 
 #LOGGING FUNCTION - starts transcript and cleans logs older than specified retention date.
-Function Start-Logging{
-    param (
-        [Parameter(Mandatory=$true)][String]$LogDirectory,
-        [Parameter(Mandatory=$true)][String]$LogName,
-        [Parameter(Mandatory=$true)][Int]$LogRetentionDays
-        )
+Function Start-Logging {
+    <#
+    .SYNOPSIS
+    This function starts a transcript in the specified directory and cleans up any files older than the specified number of days. 
 
-    #Sets screen buffer from 120 width to 500 width. This stops truncation in the log.
-    $ErrorActionPreference = 'SilentlyContinue'
-    $pshost = get-host
-    $pswindow = $pshost.ui.rawui
+    .DESCRIPTION
+    Please ensure that the log directory specified is empty, as this function will clean that folder.
 
-    $newsize = $pswindow.buffersize
-    $newsize.height = 3000
-    $newsize.width = 500
-    $pswindow.buffersize = $newsize
+    .EXAMPLE
+    Start-Logging -LogDirectory "C:\ScriptLogs\LogFolder" -LogName $LogName -LogRetentionDays 30
 
-    $newsize = $pswindow.windowsize
-    $newsize.height = 50
-    $newsize.width = 500
-    $pswindow.windowsize = $newsize
-    $ErrorActionPreference = 'Continue'
+    .LINK
+    https://github.com/AndrewEllis93/PowerShell-Scripts
 
-    #Create log directory if it does not exist already
-    If (!(Test-Path $LogDirectory)){
-        mkdir $LogDirectory
-    }
+    .NOTES
+    #>
+    Param (
+        [Parameter(Mandatory=$true)]
+        [String]$LogDirectory,
+        [Parameter(Mandatory=$true)]
+        [String]$LogName,
+        [Parameter(Mandatory=$true)]
+        [Int]$LogRetentionDays
+    )
 
-    #Starts logging.
-    New-Item -ItemType directory -Path $LogDirectory -Force | Out-Null
-    $Today = Get-Date -Format M-d-y
-    Start-Transcript -Append -Path ($LogDirectory + "\" + $LogName + "." + $Today + ".log") | Out-Null
+   #Sets screen buffer from 120 width to 500 width. This stops truncation in the log.
+   $ErrorActionPreference = 'SilentlyContinue'
+   $pshost = Get-Host
+   $pswindow = $pshost.UI.RawUI
 
-    #Shows proper date in log.
-    Write-Output ("Start time: " + (Get-Date))
+   $newsize = $pswindow.BufferSize
+   $newsize.Height = 3000
+   $newsize.Width = 500
+   $pswindow.BufferSize = $newsize
 
-    #Purges log files older than X days
-    $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
-    Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object {!$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -like "*.log"} | Remove-Item -Force
+   $newsize = $pswindow.WindowSize
+   $newsize.Height = 50
+   $newsize.Width = 500
+   $pswindow.WindowSize = $newsize
+   $ErrorActionPreference = 'Continue'
+
+   #Remove the trailing slash if present. 
+   If ($LogDirectory -like "*\") {
+       $LogDirectory = $LogDirectory.SubString(0,($LogDirectory.Length-1))
+   }
+
+   #Create log directory if it does not exist already
+   If (!(Test-Path $LogDirectory)) {
+       New-Item -ItemType Directory $LogDirectory -Force | Out-Null
+   }
+
+   $Today = Get-Date -Format M-d-y
+   Start-Transcript -Append -Path ($LogDirectory + "\" + $LogName + "." + $Today + ".log") | Out-Null
+
+   #Shows proper date in log.
+   Write-Output ("Start time: " + (Get-Date))
+
+   #Purges log files older than X days
+   $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
+   Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -like "*.log"} | Remove-Item -Force
 } 
 
 #Start logging
-Start-Logging -LogDirectory "C:\Logs\Move-DisabledLog" -LogName "Move-DisabledLog" -LogRetentionDays 30
+Start-Logging -LogDirectory "C:\ScriptLogs\Move-DisabledLog" -LogName "Move-DisabledLog" -LogRetentionDays 30
 
 #Call function
-Move-Disabled -ParentOU "OU=Disabled Objects,DC=domain,DC=local" -UserInactivityDays 30 -ComputerInactivityDays 60 -ReportOnly -ExclusionUserGroups @('ServiceAccts') -ExclusionOUs @('OU=Test,DC=domain,DC=local','OU=Test2,DC=domain,DC=local')
+Move-Disabled -ParentOU "OU=Disabled Objects,DC=domain,DC=local" -UserInactivityDays 30 -ComputerInactivityDays 60 -ReportOnly -ExclusionOUs @('OU=Test,DC=domain,DC=local','OU=Test2,DC=domain,DC=local') -ExclusionUserGroups @('ServiceAccts')
 
-#Stop logging
+#Stop logging.
+Write-Output ("Stop time: " + (Get-Date))
 Stop-Transcript

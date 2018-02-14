@@ -24,9 +24,6 @@ Function Dump-GPOs {
     https://github.com/AndrewEllis93/PowerShell-Scripts
 
     .NOTES
-    Title: Dump-GPOs
-    Date Created : 2017-12-28
-    Last Edit: 2017-12-29
     Author : Andrew Ellis
     GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
     #>

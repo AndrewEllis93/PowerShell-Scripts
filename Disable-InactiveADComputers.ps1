@@ -2,7 +2,7 @@
 #
 # Title: Disable-InactiveADComputers
 # Date Created : 2017-09-22
-# Last Edit: 2017-12-29
+# Last Edit: 2018-02-14
 # Author : Andrew Ellis
 # GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
 #
@@ -110,7 +110,7 @@ Function Disable-InactiveADComputers {
         [Parameter(Mandatory=$true)]
         [Array]$To, 
 
-        #Computering for the time zone difference, since some results are given in UTC. Eastern time is UTC-5. 
+        #Accounting for the time zone difference, since some results are given in UTC. Eastern time is UTC-5. 
         [Parameter(Mandatory=$true)]
         [Int]$UTCSkew, 
 
@@ -136,289 +136,352 @@ Function Disable-InactiveADComputers {
         $OutputDirectory = $OutputDirectory.substring(0,($OutputDirectory.Length-1))
     }
 
-    #Declare try count at 0.
-    $TryCount= 0
-
-    #Get all DCs, add array names to vars array
-    $DCnames = (Get-ADGroupMember 'Domain Controllers').Name | Sort-Object
-
-            #This just tests if we already have results for each DC, in case we are running this twice in the same session (mostly just for testing). 
-            $ExistingResults = @(0) * $DCnames.Count
-            $TestIteration = 0
-            $DCnames | ForEach-Object {
-                If (Get-Variable -Name $_ -ErrorAction SilentlyContinue){
-                    $ExistingResults[$TestIteration] = $True
-                }
-                Else {
-                    $ExistingResults[$TestIteration] = $False
-                }
-                $TestIteration++
-            }
-
-    #Check that results match from each DC by comparing all results in order. Retry if there is a mismatch, up to the MaxTryCount (default 20)
-    While (($ComparisonResults -contains $False -or !$ComparisonResults) -and $TryCount -lt $MaxTryCount){
-        #Makes sure we don't have any left over jobs from another run
-        Get-Job | Stop-Job
-        Get-Job | Remove-Job
-
-        If ((!$ExistingResults -or $ExistingResults -contains $False) -or ($ComparisonResults -contains $False -or !$ComparisonResults)){
-            #Fetch AD computers from each DC, add to named array
-            Write-Output ""
-            Write-Output "Starting data retrieval jobs..."
-
-            ForEach ($DCName in $DCnames) {
-                Start-Job -Name $DCName -ArgumentList $DCName -ScriptBlock {
-                    param($DCName)
-                    #Get AD results
-                    Import-Module ActiveDirectory
-                    $Results = Get-ADComputer -Filter {Enabled -eq $True} -Server $DCName -Properties DistinguishedName,LastLogon,LastLogonTimestamp,whenCreated,Description -ErrorAction Stop
-                    $Results = $Results | Sort-Object -Property SamComputerName
-                    Return $Results
-                }
-            } 
-
-            #Wait for jobs to complete, show progress bar
-            Wait-JobsWithProgress -Activity "Retrieving and sorting results from each DC. Please be patient"
-            
-            #Put results into named arrays for each DC
-            ForEach ($DCName in $DCnames) {
-                Set-Variable -Name $DCName -Value (Receive-Job -Name $DCName)
-            }
-        }
-
-        $ComparisonResults = @()
-        
-        ForEach ($i in 0..(($DCnames.Count)-1)){
-            If ($i -le (($DCnames.Count)-2)){
-                Write-Output ("Comparing results from " + $DCnames[$i] + " and " + $DCnames[$i+1] + "...")
-                $NotEqual = Compare-Object (Get-Variable -Name $DCnames[$i]).Value (Get-Variable -Name $DCnames[$i+1]).Value -Property SamComputerName
-
-                If (!$NotEqual) {
-                    $ComparisonResults += $True
-                }
-                Else {
-                    $ComparisonResults += $False
-                }
-            }
-        }
-        If ($ComparisonResults -contains $False){
-            Write-Warning "One or more DCs returned differing results. This is likely just replication delay. Retrying..."
-            $TryCount++
-        }
-    }
-    If ($TryCount -lt $MaxTryCount){
-        Write-Output "All DC results are identical!"
-    }
-    Else {
-        Throw "Try limit exceeded. Aborting."
-    }
-
-    #Removes the completes jobs.
-    Get-Job | Remove-Job
-
-    #Convert our results into hash tables because they are MUCH faster to process than PSObjects.
-    If (!$ExistingResults -or $ExistingResults -contains $False){
+    #RE-ENABLED ACCOUNT FLAGGING
+        #Gets all AD computers with ExtensionAttribute3 set to an inactivity or disablement date and sets it to "RE-ENABLED ON "
         Write-Output ""
-        Write-Output "Starting hash table conversions..."
-        Write-Output ""
-        ForEach ($DCName in $DCnames) {
-            [array]$Data = (Get-Variable -Name $DCName).Value
-            $Count = (Get-Variable -Name $DCName).Value.Count
+        Write-Output "RE-ENABLED ACCOUNT FLAGGING:"
+        Write-Output "Finding re-enabled computers..."
 
-            Start-Job -Name $DCName -ArgumentList $Data,$Count -ScriptBlock {
-                param(
-                    [array]$Data,
-                    $Count
-                )
-                #Function to convert objects to hash tables
-                #Credit: https://gist.github.com/dlwyatt/4166704557cf73bdd3ae
-                Function ConvertTo-Hashtable{
-                    [CmdletBinding()]
-                    Param (
-                        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
-                        [psobject[]] $InputObject
-                    )
-                    Process{
-                        ForEach ($object in $InputObject){
-                            $hash = @{}
-                            
-                            ForEach ($property in $object.PSObject.Properties){
-                                $hash[$property.Name] = $property.Value
-                            }
+        $ReEnabledComputers = Get-ADComputer -Filter * -Properties DistinguishedName,ExtensionAttribute3,SamAccountName,Enabled | Where-Object {
+            $_.Enabled -eq $True -and
+            (
+                $_.ExtensionAttribute3 -like "DISABLED ON*" -or
+                $_.ExtensionAttribute3 -like "INACTIVE SINCE*"
+            )
+        }
+
+        Write-Output (($ReEnabledComputers.SamAccountName.Count).ToString() + " computers were found.")
+
+        $Date = "RE-ENABLED ON " + (Get-Date)
+
+        ForEach ($ReEnabledComputer in $ReEnabledComputers){
+            Write-Output ("Setting ExtensionAttribute3 re-enabled flag for " + $ReEnabledComputer.SamAccountName + "...")
+            If ($ReportOnly){
+                Set-ADComputer -Identity $ReEnabledComputer.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf
+            }
+            Else {
+                Set-ADComputer -Identity $ReEnabledComputer.SamAccountName -Replace @{ExtensionAttribute3=$Date}
+            }
+        }
+
+    #OLD RE-ENABLED ACCOUNT CLEANUP
+        #Gets all computers with ExtensionAttribute3 set to an expired re-enable date to clear it.
+        Write-Output ""
+        Write-Output 'CLEANUP - EXPIRED "RE-ENABLED" FLAGS:'
+        Write-Output 'Finding computers with expired "re-enabled" flags...'
+
+        $ExpiredFlagComputers = Get-ADComputer -Filter * -Properties DistinguishedName,ExtensionAttribute3,SamAccountName,Enabled | Where-Object {
+            $_.ExtensionAttribute3 -like "RE-ENABLED*" -and 
+            [datetime]($_.ExtensionAttribute3 -replace 'RE-ENABLED ON ', '') -lt (Get-Date).AddDays(-$DaysThreshold)
+        }
+
+        Write-Output (($ExpiredFlagComputers.SamAccountName.Count).ToString() + " computers were found.")
+
+        ForEach ($ExpiredFlagComputer in $ExpiredFlagComputers){
+            Write-Output ("Clearing ExtensionAttribute3 re-enabled flag for " + $ExpiredFlagComputer.SamAccountName + "...")
+            If ($ReportOnly){
+                Set-ADComputer -Identity $ExpiredFlagComputer.SamAccountName -Clear ExtensionAttribute3 -WhatIf
+            }
+            Else {
+                Set-ADComputer -Identity $ExpiredFlagComputer.SamAccountName -Clear ExtensionAttribute3
+            }
+        }
+
+    #INACTIVE COMPUTER DISABLEMENT AND FLAGGING
+        #Declare try count at 0.
+        $TryCount= 0
+
+        #Get all DCs, add array names to vars array
+        $DCnames = (Get-ADGroupMember 'Domain Controllers').Name | Sort-Object
+
+                #This just tests if we already have results for each DC, in case we are running this twice in the same session (mostly just for testing). 
+                $ExistingResults = @(0) * $DCnames.Count
+                $TestIteration = 0
+                $DCnames | ForEach-Object {
+                    If (Get-Variable -Name $_ -ErrorAction SilentlyContinue){
+                        $ExistingResults[$TestIteration] = $True
+                    }
+                    Else {
+                        $ExistingResults[$TestIteration] = $False
+                    }
+                    $TestIteration++
+                }
+
+        #Check that results match from each DC by comparing all results in order. Retry if there is a mismatch, up to the MaxTryCount (default 20)
+        While (($ComparisonResults -contains $False -or !$ComparisonResults) -and $TryCount -lt $MaxTryCount){
+            #Makes sure we don't have any left over jobs from another run
+            Get-Job | Stop-Job
+            Get-Job | Remove-Job
+
+            If ((!$ExistingResults -or $ExistingResults -contains $False) -or ($ComparisonResults -contains $False -or !$ComparisonResults)){
+                #Fetch AD computers from each DC, add to named array
+                Write-Output ""
+                Write-Output "Starting data retrieval jobs..."
+
+                ForEach ($DCName in $DCnames) {
+                    Start-Job -Name $DCName -ArgumentList $DCName -ScriptBlock {
+                        param($DCName)
+                        #Get AD results
+                        Import-Module ActiveDirectory
+                        $Results = Get-ADComputer -Filter {Enabled -eq $True} -Server $DCName -Properties DistinguishedName,LastLogon,LastLogonTimestamp,whenCreated,Description,ExtensionAttribute3 -ErrorAction Stop
+                        $Results = $Results | Sort-Object -Property SamAccountName
+                        Return $Results
+                    }
+                } 
+
+                #Wait for jobs to complete, show progress bar
+                Wait-JobsWithProgress -Activity "Retrieving and sorting results from each DC. Please be patient"
                 
-                            $hash
-                        }
+                #Put results into named arrays for each DC
+                ForEach ($DCName in $DCnames) {
+                    Set-Variable -Name $DCName -Value (Receive-Job -Name $DCName)
+                }
+            }
+
+            $ComparisonResults = @()
+            
+            ForEach ($i in 0..(($DCnames.Count)-1)){
+                If ($i -le (($DCnames.Count)-2)){
+                    Write-Output ("Comparing results from " + $DCnames[$i] + " and " + $DCnames[$i+1] + "...")
+                    $NotEqual = Compare-Object (Get-Variable -Name $DCnames[$i]).Value (Get-Variable -Name $DCnames[$i+1]).Value -Property SamAccountName
+
+                    If (!$NotEqual) {
+                        $ComparisonResults += $True
+                    }
+                    Else {
+                        $ComparisonResults += $False
                     }
                 }
-                #Declare the results array with empty hash tables to put the hash table objects into.
-                [array]$HashResults = @(@{}) * $Count
-                
-                #Loop through each object, convert to hash table, add to HashResults array.
-                $Iteration = 0
-                $Data | ForEach-Object {
-                    $HashResults[$Iteration] = $_ | ConvertTo-Hashtable
-                    $Iteration++
+            }
+            If ($ComparisonResults -contains $False){
+                Write-Warning "One or more DCs returned differing results. This is likely just replication delay. Retrying..."
+                $TryCount++
+            }
+        }
+        If ($TryCount -lt $MaxTryCount){
+            Write-Output "All DC results are identical!"
+        }
+        Else {
+            Throw "Try limit exceeded. Aborting."
+        }
+
+        #Removes the completes jobs.
+        Get-Job | Remove-Job
+
+        #Convert our results into hash tables because they are MUCH faster to process than PSObjects.
+        If (!$ExistingResults -or $ExistingResults -contains $False){
+            Write-Output ""
+            Write-Output "Starting hash table conversions..."
+            Write-Output ""
+            ForEach ($DCName in $DCnames) {
+                [array]$Data = (Get-Variable -Name $DCName).Value
+                $Count = (Get-Variable -Name $DCName).Value.Count
+
+                Start-Job -Name $DCName -ArgumentList $Data,$Count -ScriptBlock {
+                    param(
+                        [array]$Data,
+                        $Count
+                    )
+                    #Function to convert objects to hash tables
+                    #Credit: https://gist.github.com/dlwyatt/4166704557cf73bdd3ae
+                    Function ConvertTo-Hashtable{
+                        [CmdletBinding()]
+                        Param (
+                            [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+                            [psobject[]] $InputObject
+                        )
+                        Process{
+                            ForEach ($object in $InputObject){
+                                $hash = @{}
+                                
+                                ForEach ($property in $object.PSObject.Properties){
+                                    $hash[$property.Name] = $property.Value
+                                }
+                    
+                                $hash
+                            }
+                        }
+                    }
+                    #Declare the results array with empty hash tables to put the hash table objects into.
+                    [array]$HashResults = @(@{}) * $Count
+                    
+                    #Loop through each object, convert to hash table, add to HashResults array.
+                    $Iteration = 0
+                    $Data | ForEach-Object {
+                        $HashResults[$Iteration] = $_ | ConvertTo-Hashtable
+                        $Iteration++
+                    }
+                    Return $HashResults
                 }
-                Return $HashResults
+            } 
+        }
+
+        #Wait for jobs to complete, show progress bar
+        Wait-JobsWithProgress -Activity "Converting results to hash tables"
+
+        #Get the hash table results from the jobs.
+        If (!$ExistingResults -or $ExistingResults -contains $False){
+            ForEach ($DCName in $DCNames){
+                Set-Variable -Name $DCName -Value (Receive-Job -Name $DCName) -Force
             }
-        } 
-    }
-
-    #Wait for jobs to complete, show progress bar
-    Wait-JobsWithProgress -Activity "Converting results to hash tables"
-
-    #Get the hash table results from the jobs.
-    If (!$ExistingResults -or $ExistingResults -contains $False){
-        ForEach ($DCName in $DCNames){
-            Set-Variable -Name $DCName -Value (Receive-Job -Name $DCName) -Force
         }
-    }
-    
-    #Get current time for comparison later. 
-    $StartTime = Get-Date
+        
+        #Get current time for comparison later. 
+        $StartTime = Get-Date
 
-    #Computer count so we know how many times to loop.
-    $ComputerCount = (Get-Variable -Name $DCnames[0]).Value.Count
+        #Computer count so we know how many times to loop.
+        $ComputerCount = (Get-Variable -Name $DCnames[0]).Value.Count
 
-    #Create results array of the same size
-    $FullResults = @($null) * $ComputerCount
+        #Create results array of the same size
+        $FullResults = @($null) * $ComputerCount
 
-    #Loop through array indexes
-    ForEach ($i in 0..($ComputerCount -1)){
-        #Grab computer object from each resultant array, make array of each computer object
-        $ComputerEntries = @(@{}) * $DCnames.Count
-        ForEach ($o in 0..($DCnames.Count -1)) {
-            $ComputerEntries[$o] = (Get-Variable -Name $DCnames[$o]).Value[$i]
+        #Loop through array indexes
+        ForEach ($i in 0..($ComputerCount -1)){
+            $ReEnabledDate = $null
+
+            #Grab computer object from each resultant array, make array of each computer object
+            $ComputerEntries = @(@{}) * $DCnames.Count
+            ForEach ($o in 0..($DCnames.Count -1)) {
+                $ComputerEntries[$o] = (Get-Variable -Name $DCnames[$o]).Value[$i]
+            }
+
+            #If that computer's array contains a mismatch, bail. This should realistically never happen because we already compared the arrays.
+            If (($ComputerEntries.SamAccountName | Select-Object -Unique).Count -gt 1){
+                Throw "A computer mismatch at index $i has occurred. Aborting."
+            }
+
+            #Find most recent LastLogon, whenCreated, and LastLogonTimestamps, cast to datetimes.
+            If ($ComputerEntries.LastLogon){
+                [datetime]$LastLogon = [datetime]::FromFileTimeUtc(($ComputerEntries.LastLogon | Measure-Object -Maximum).Maximum)
+                $LastLogon = $LastLogon.AddHours($UTCSkew)
+                [datetime]$TrueLastLogon = $LastLogon
+            }
+            Else {[datetime]$LastLogon = 0; $TrueLastLogon = 0} 
+
+            [datetime]$whenCreated = $ComputerEntries[0].whenCreated
+
+            If ($ComputerEntries.LastLogonTimestamp){
+                [datetime]$LastLogonTimestamp = [datetime]::FromFileTimeUtc(($ComputerEntries.LastLogonTimestamp | Measure-Object -Maximum).Maximum)
+                $LastLogonTimestamp = $LastLogonTimestamp.AddHours($UTCSkew)
+            }
+            Else {[datetime]$LastLogonTimestamp = 0}
+
+            #If LastLogonTimestamp is newer, use that instead of LastLogon. Realistically this should never happen, but just in case.
+            If ($LastLogonTimestamp -gt $LastLogon){
+                $TrueLastLogon = $LastLogonTimestamp
+            }
+
+            #If there is no last logon available from any attributes, or it is older than 20 years (essentially null/zero), use the date created instead.
+            If ($TrueLastLogon -eq 0 -or !$TrueLastLogon -or (New-TimeSpan -Start $TrueLastLogon -End $StartTime).Days -gt 7300){
+                [datetime]$TrueLastLogon = $whenCreated
+            }
+
+            #If the account was flagged as re-enabled, take that into consideration too.
+            If ($ComputerEntries.ExtensionAttribute3){
+                $ReEnabledDate = [datetime](($ComputerEntries.ExtensionAttribute3 | Measure-Object -Maximum).Maximum -replace 'RE-ENABLED ON ', '')
+                If ($ReEnabledDate -gt $TrueLastLogon){
+                    $TrueLastLogon = $ReEnabledDate
+                }
+            }
+
+            #Calculate days of inactivity.
+            $DaysInactive = (New-TimeSpan -Start $TrueLastLogon -End $StartTime).Days
+
+            #Create object for output array
+            $OutputObj = [PSCustomObject]@{
+                SamAccountName=$ComputerEntries[0].SamAccountName
+                Enabled=$ComputerEntries[0].Enabled
+                LastLogon=$TrueLastLogon
+                WhenCreated=$whenCreated
+                DaysInactive=$DaysInactive
+                GivenName=$ComputerEntries[0].GivenName
+                Surname=$ComputerEntries[0].SurName
+                Name=$ComputerEntries[0].Name
+                DistinguishedName=$ComputerEntries[0].DistinguishedName
+                Description=$ComputerEntries[0].Description
+                ReEnabledDate=$ReEnabledDate
+            }  
+
+            #Append object to output array and output progress to console.
+            $FullResults[$i] = $OutputObj
+            $PercentComplete = [math]::Round((($i/$ComputerCount) * 100),2)
+            Write-Output ("Computer: " + $OutputObj.SamAccountName + " - Last logon: $TrueLastLogon ($DaysInactive day(s) inactivity) - $PercentComplete% complete.")
         }
 
-        #If that computer's array contains a mismatch, bail. This should realistically never happen because we already compared the arrays.
-        If (($ComputerEntries.SamComputerName | Select-Object -Unique).Count -gt 1){
-            Throw "A computer mismatch at index $i has occurred. Aborting."
+        #Gets exlusions, error action is set to stop
+        If ($ExclusionGroups){
+            $ComputerExclusions = @()
+            ForEach ($ExclusionGroup in $ExclusionGroups){
+                Write-Output "Getting `"$ExclusionGroup`" members..."
+                $ComputerExclusions += (Get-ADGroupMember -Identity $ExclusionGroup -ErrorAction Stop).SamAccountName
+            }
         }
 
-        #Find most recent LastLogon, whenCreated, and LastLogonTimestamps, cast to datetimes.
-        If ($ComputerEntries.LastLogon){
-            [datetime]$LastLogon = [datetime]::FromFileTimeUtc(($ComputerEntries.LastLogon | Measure-Object -Maximum).Maximum)
-            $LastLogon = $LastLogon.AddHours($UTCSkew)
-            [datetime]$TrueLastLogon = $LastLogon
+        #Filter
+        Write-Output "Filtering computers..."
+        $FilteredComputersResults = $FullResults | Where-Object {$ComputerExclusions -notcontains $_.SamAccountName}
+        $FullResults = $FullResults | Where-Object {$_ -ne $null}
+
+        #For some reason compare-object is not working properly without specifying all properties. Don't know why. 
+        $ExcludedComputersResults = Compare-Object $FilteredComputersResults $FullResults `
+        -Property SamAccountName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description,ExtensionAttribute3 | 
+        Select-Object SamAccountName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description,ExtensionAttribute3
+
+        #Add to ComputersDisabled array for CSV report. Also disable and stamp computers if ReportOnly is set to false (default).
+        $InactiveComputersDisabled = @()
+        If (!$ReportOnly){
+            $FilteredComputersResults | ForEach-Object {
+                If ($_.DaysInactive -ge $DaysThreshold){
+                    Write-Output ("Disabling " + $_.SamAccountName + "...")
+                    Disable-ADAccount -Identity $_.SamAccountName
+                    $Date = "INACTIVE SINCE " + (Get-Date)
+                    Set-ADComputer -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date}
+                    $InactiveComputersDisabled += $_
+                }
+            }
         }
-        Else {[datetime]$LastLogon = 0; $TrueLastLogon = 0} 
-
-        [datetime]$whenCreated = $ComputerEntries[0].whenCreated
-
-        If ($ComputerEntries.LastLogonTimestamp){
-            [datetime]$LastLogonTimestamp = [datetime]::FromFileTimeUtc(($ComputerEntries.LastLogonTimestamp | Measure-Object -Maximum).Maximum)
-            $LastLogonTimestamp = $LastLogonTimestamp.AddHours($UTCSkew)
-        }
-        Else {[datetime]$LastLogonTimestamp = 0}
-
-        #If LastLogonTimestamp is newer, use that instead of LastLogon. Realistically this should never happen, but just in case.
-        If ($LastLogonTimestamp -gt $LastLogon){
-            $TrueLastLogon = $LastLogonTimestamp
+        Else {
+            $FilteredComputersResults | ForEach-Object {
+                If ($_.DaysInactive -ge $DaysThreshold){
+                    Write-Output ("Disabling " + $_.SamAccountName + "...")
+                    Disable-ADAccount -Identity $_.SamAccountName -WhatIf
+                    $Date = "INACTIVE SINCE " + (Get-Date)
+                    Set-ADComputer -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf
+                    $InactiveComputersDisabled += $_
+                }
+            }
         }
 
-        #If there is no last logon available from any attributes, or it is older than 20 years (essentially null/zero), use the date created instead.
-        If ($TrueLastLogon -eq 0 -or !$TrueLastLogon -or (New-TimeSpan -Start $TrueLastLogon -End $StartTime).Days -gt 7300){
-            [datetime]$TrueLastLogon = $whenCreated
-        }
-
-        #Calculate days of inactivity.
-        $DaysInactive = (New-TimeSpan -Start $TrueLastLogon -End $StartTime).Days
-
-        #Create object for output array
-        $OutputObj = [PSCustomObject]@{
-            SamComputerName=$ComputerEntries[0].SamComputerName
-            Enabled=$ComputerEntries[0].Enabled
-            LastLogon=$TrueLastLogon
-            WhenCreated=$whenCreated
-            DaysInactive=$DaysInactive
-            GivenName=$ComputerEntries[0].GivenName
-            Surname=$ComputerEntries[0].SurName
-            Name=$ComputerEntries[0].Name
-            DistinguishedName=$ComputerEntries[0].DistinguishedName
-            Description=$ComputerEntries[0].Description
-        }  
-
-        #Append object to output array and output progress to console.
-        $FullResults[$i] = $OutputObj
-        $PercentComplete = [math]::Round((($i/$ComputerCount) * 100),2)
-        Write-Output ("Computer: " + $OutputObj.SamComputerName + " - Last logon: $TrueLastLogon ($DaysInactive day(s) inactivity) - $PercentComplete% complete.")
-    }
-
-    #Gets exlusions, error action is set to stop
-    If ($ExclusionGroups){
-        $ComputerExclusions = @()
-        ForEach ($ExclusionGroup in $ExclusionGroups){
-            Write-Output "Getting `"$ExclusionGroup`" members..."
-            $ComputerExclusions += (Get-ADGroupMember -Identity $ExclusionGroup -ErrorAction Stop).SamComputerName
-        }
-    }
-
-    #Filter
-    Write-Output "Filtering computers..."
-    $FilteredComputersResults = $FullResults | Where-Object {$ComputerExclusions -notcontains $_.SamComputerName}
-    $FullResults = $FullResults | Where-Object {$_ -ne $null}
-
-    #For some reason compare-object is not working properly without specifying all properties. Don't know why. 
-    $ExcludedComputersResults = Compare-Object $FilteredComputersResults $FullResults `
-    -Property SamComputerName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description | 
-    Select-Object SamComputerName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description
-
-    #Add to ComputersDisabled array for CSV report. Also disable and stamp computers if ReportOnly is set to false (default).
-    $InactiveComputersDisabled = @()
-    If (!$ReportOnly){
-        $FilteredComputersResults | ForEach-Object {
+        #Filtered computers - add to ComputersNotDisabled array for CSV report
+        $ExcludedInactiveComputers = @()
+        $ExcludedComputersResults | ForEach-Object {
             If ($_.DaysInactive -ge $DaysThreshold){
-                Write-Output ("Disabling " + $_.SamComputerName + "...")
-                Disable-ADComputer -Identity $_.SamComputerName
-                $Date = "INACTIVE SINCE " + (Get-Date)
-                Set-ADComputer -Identity $_.SamComputerName -Replace @{ExtensionAttribute3=$Date}
-                $InactiveComputersDisabled += $_
+                $ExcludedInactiveComputers += $_
             }
         }
-    }
-    Else {
-        $FilteredComputersResults | ForEach-Object {
-            If ($_.DaysInactive -ge $DaysThreshold){
-                Write-Output ("Disabling " + $_.SamComputerName + "...")
-                Disable-ADComputer -Identity $_.SamComputerName -WhatIf
-                $Date = "INACTIVE SINCE " + (Get-Date)
-                Set-ADComputer -Identity $_.SamComputerName -Replace @{ExtensionAttribute3=$Date} -WhatIf
-                $InactiveComputersDisabled += $_
-            }
+
+        #Create output directory if it does not exist
+        If (!(Test-Path $OutputDirectory)){
+            New-Item -ItemType Directory $OutputDirectory
         }
-    }
 
-    #Filtered computers - add to ComputersNotDisabled array for CSV report
-    $ExcludedInactiveComputers = @()
-    $ExcludedComputersResults | ForEach-Object {
-        If ($_.DaysInactive -ge $DaysThreshold){
-            $ExcludedInactiveComputers += $_
-        }
-    }
+        #Form the paths for the output files
+        $InactiveComputersDisabledCSV = $OutputDirectory + "\InactiveComputers-Disabled.csv"
+        $ComputersNotDisabledCSV = $OutputDirectory + "\InactiveComputers-Excluded.csv"
 
-    #Create output directory if it does not exist
-    If (!(Test-Path $OutputDirectory)){
-        New-Item -ItemType Directory $OutputDirectory
-    }
+        #Export the CSVs
+        $InactiveComputersDisabled | Export-CSV $InactiveComputersDisabledCSV -NoTypeInformation -Force
+        $ExcludedInactiveComputers | Export-CSV $ComputersNotDisabledCSV -NoTypeInformation -Force
 
-    #Form the paths for the output files
-    $InactiveComputersDisabledCSV = $OutputDirectory + "\InactiveComputers-Disabled.csv"
-    $ComputersNotDisabledCSV = $OutputDirectory + "\InactiveComputers-Excluded.csv"
+        #Send email with CSVs as attachments
+        Write-Output "Sending email..."
+        Send-MailMessage -Attachments @($InactiveComputersDisabledCSV,$ComputersNotDisabledCSV) -From $From -SmtpServer $SMTPServer -To $To -Subject $Subject
 
-    #Export the CSVs
-    $InactiveComputersDisabled | Export-CSV $InactiveComputersDisabledCSV -NoTypeInformation -Force
-    $ExcludedInactiveComputers | Export-CSV $ComputersNotDisabledCSV -NoTypeInformation -Force
-
-    #Send email with CSVs as attachments
-    Write-Output "Sending email..."
-    Send-MailMessage -Attachments @($InactiveComputersDisabledCSV,$ComputersNotDisabledCSV) -From $From -SmtpServer $SMTPServer -To $To -Subject $Subject
-
-    <#
-    # This is here if you want to use it in conjunction with my Move-Disabled script. Just uncomment and replace with your scheduled task path. 
-    Write-Output "Starting Move-Disabled task..."
-    Start-ScheduledTask -TaskName "\Move-Disabled"
-    #>
+        <#
+        # This is here if you want to use it in conjunction with my Move-Disabled script. Just uncomment and replace with your scheduled task path. 
+        Write-Output "Starting Move-Disabled task..."
+        Start-ScheduledTask -TaskName "\Move-Disabled"
+        #>
 }
 
 Function Wait-JobsWithProgress {
@@ -434,7 +497,7 @@ Function Wait-JobsWithProgress {
     While ($CompletedJobs -ne $Total) {
         # Update progress based on how many jobs are done yet.
         # Write-Output "Waiting for background jobs: $CompletedJobs/$Total"
-        Write-Progress -Activity $Activity -PercentComplete (($CompletedJobs/$Total)*100) -Status "$CompletedJobs/$Total jobs completed."
+        Write-Progress -Activity $Activity -PercentComplete (($CompletedJobs/$Total)*100) -Status "$CompletedJobs/$Total jobs completed"
 
         # After updating the progress bar, get current job count
         $CompletedJobs = (Get-Job -State Completed).Count
@@ -447,6 +510,7 @@ Start-Logging -LogDirectory "C:\ScriptLogs\Disable-InactiveADComputers" -LogName
 
 #Start function.
 . Disable-InactiveADComputers -To @("email@domain.com","email2@domain.com") -From "noreply@domain.com" -SMTPServer "server.domain.local" -UTCSkew -5 -DaysThreshold 60 -OutputDirectory "C:\ScriptLogs\Disable-InactiveADComputers" -ExclusionGroup @("ServiceAccts") -ReportOnly
+
 #Stop logging.
 Write-Output ("Stop time: " + (Get-Date))
 Stop-Transcript

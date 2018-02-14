@@ -21,9 +21,6 @@ Function Restart-DFSRAndEnableAutoRecovery {
     Restart-DFSRAndEnableAutoRecovery
     
     .NOTES
-    Title: Restart-DFSRAndEnableAutoRecovery
-    Date Created : 2017-12-28
-    Last Edit: 2017-12-29
     Author : Andrew Ellis
     GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
     #>
@@ -41,43 +38,66 @@ Function Restart-DFSRAndEnableAutoRecovery {
         Invoke-Command -ComputerName $DC.Name -ScriptBlock {cmd.exe /c wmic /namespace:\\root\microsoftdfs path dfsrmachineconfig set StopReplicationOnAutoRecovery=FALSE}
     }
 }
-Function Start-Logging{
-    param (
-        [Parameter(Mandatory=$true)][String]$LogDirectory,
-        [Parameter(Mandatory=$true)][String]$LogName,
-        [Parameter(Mandatory=$true)][Int]$LogRetentionDays
+Function Start-Logging {
+    <#
+    .SYNOPSIS
+    This function starts a transcript in the specified directory and cleans up any files older than the specified number of days. 
+
+    .DESCRIPTION
+    Please ensure that the log directory specified is empty, as this function will clean that folder.
+
+    .EXAMPLE
+    Start-Logging -LogDirectory "C:\ScriptLogs\LogFolder" -LogName $LogName -LogRetentionDays 30
+
+    .LINK
+    https://github.com/AndrewEllis93/PowerShell-Scripts
+
+    .NOTES
+    #>
+    Param (
+        [Parameter(Mandatory=$true)]
+        [String]$LogDirectory,
+        [Parameter(Mandatory=$true)]
+        [String]$LogName,
+        [Parameter(Mandatory=$true)]
+        [Int]$LogRetentionDays
     )
 
-    #Sets screen buffer from 120 width to 500 width. This stops truncation in the log.
-    $ErrorActionPreference = 'SilentlyContinue'
-    $pshost = get-host
-    $pswindow = $pshost.ui.rawui
+   #Sets screen buffer from 120 width to 500 width. This stops truncation in the log.
+   $ErrorActionPreference = 'SilentlyContinue'
+   $pshost = Get-Host
+   $pswindow = $pshost.UI.RawUI
 
-    $newsize = $pswindow.buffersize
-    $newsize.height = 3000
-    $newsize.width = 500
-    $pswindow.buffersize = $newsize
+   $newsize = $pswindow.BufferSize
+   $newsize.Height = 3000
+   $newsize.Width = 500
+   $pswindow.BufferSize = $newsize
 
-    $newsize = $pswindow.windowsize
-    $newsize.height = 50
-    $newsize.width = 500
-    $pswindow.windowsize = $newsize
-    $ErrorActionPreference = 'Continue'
+   $newsize = $pswindow.WindowSize
+   $newsize.Height = 50
+   $newsize.Width = 500
+   $pswindow.WindowSize = $newsize
+   $ErrorActionPreference = 'Continue'
 
-    #Create log directory if it does not exist already
-    If (!(Test-Path $LogDirectory)){mkdir $LogDirectory}
+   #Remove the trailing slash if present. 
+   If ($LogDirectory -like "*\") {
+       $LogDirectory = $LogDirectory.SubString(0,($LogDirectory.Length-1))
+   }
 
-    #Starts logging.
-    New-Item -ItemType directory -Path $LogDirectory -Force | Out-Null
-    $Today = Get-Date -Format M-d-y
-    Start-Transcript -Append -Path ($LogDirectory + "\" + $LogName + "." + $Today + ".log") | Out-Null
+   #Create log directory if it does not exist already
+   If (!(Test-Path $LogDirectory)) {
+       New-Item -ItemType Directory $LogDirectory -Force | Out-Null
+   }
 
-    #Shows proper date in log.
-    Write-Output ("Start time: " + (Get-Date))
+   $Today = Get-Date -Format M-d-y
+   Start-Transcript -Append -Path ($LogDirectory + "\" + $LogName + "." + $Today + ".log") | Out-Null
 
-    #Purges log files older than X days
-    $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
-    Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -like "*.log"} | Remove-Item -Force
+   #Shows proper date in log.
+   Write-Output ("Start time: " + (Get-Date))
+
+   #Purges log files older than X days
+   $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
+   Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -like "*.log"} | Remove-Item -Force
 } 
 
 #Start logging.

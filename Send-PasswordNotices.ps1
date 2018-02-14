@@ -11,42 +11,67 @@
 #
 ####################################################
 
-Function Start-Logging{
-    param (
-        [Parameter(Mandatory=$true)][String]$LogDirectory,
-        [Parameter(Mandatory=$true)][String]$LogName,
-        [Parameter(Mandatory=$true)][Int]$LogRetentionDays
-        )
+Function Start-Logging {
+    <#
+    .SYNOPSIS
+    This function starts a transcript in the specified directory and cleans up any files older than the specified number of days. 
 
-    #Sets screen buffer from 120 width to 500 width. This stops truncation in the log.
-    $ErrorActionPreference = 'SilentlyContinue'
-    $pshost = get-host
-    $pswindow = $pshost.ui.rawui
- 
-    $newsize = $pswindow.buffersize
-    $newsize.height = 3000
-    $newsize.width = 500
-    $pswindow.buffersize = $newsize
- 
-    $newsize = $pswindow.windowsize
-    $newsize.height = 50
-    $newsize.width = 500
-    $pswindow.windowsize = $newsize
-    $ErrorActionPreference = 'Continue'
+    .DESCRIPTION
+    Please ensure that the log directory specified is empty, as this function will clean that folder.
 
-    #Starts logging.
-    New-Item -ItemType directory -Path $LogDirectory -Force | Out-Null
-    $Today = Get-Date -Format M-d-y
-    Start-Transcript -Append -Path ($LogDirectory + "\" + $LogName + "." + $Today + ".log") | Out-Null
+    .EXAMPLE
+    Start-Logging -LogDirectory "C:\ScriptLogs\LogFolder" -LogName $LogName -LogRetentionDays 30
 
-    #Shows proper date in log.
-    Get-Date
+    .LINK
+    https://github.com/AndrewEllis93/PowerShell-Scripts
 
-    #Purges log files older than X days
-    $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
-    Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate  -and $_.Name -like "*.log"} | Remove-Item -Force
+    .NOTES
+    #>
+    Param (
+        [Parameter(Mandatory=$true)]
+        [String]$LogDirectory,
+        [Parameter(Mandatory=$true)]
+        [String]$LogName,
+        [Parameter(Mandatory=$true)]
+        [Int]$LogRetentionDays
+    )
+
+   #Sets screen buffer from 120 width to 500 width. This stops truncation in the log.
+   $ErrorActionPreference = 'SilentlyContinue'
+   $pshost = Get-Host
+   $pswindow = $pshost.UI.RawUI
+
+   $newsize = $pswindow.BufferSize
+   $newsize.Height = 3000
+   $newsize.Width = 500
+   $pswindow.BufferSize = $newsize
+
+   $newsize = $pswindow.WindowSize
+   $newsize.Height = 50
+   $newsize.Width = 500
+   $pswindow.WindowSize = $newsize
+   $ErrorActionPreference = 'Continue'
+
+   #Remove the trailing slash if present. 
+   If ($LogDirectory -like "*\") {
+       $LogDirectory = $LogDirectory.SubString(0,($LogDirectory.Length-1))
+   }
+
+   #Create log directory if it does not exist already
+   If (!(Test-Path $LogDirectory)) {
+       New-Item -ItemType Directory $LogDirectory -Force | Out-Null
+   }
+
+   $Today = Get-Date -Format M-d-y
+   Start-Transcript -Append -Path ($LogDirectory + "\" + $LogName + "." + $Today + ".log") | Out-Null
+
+   #Shows proper date in log.
+   Write-Output ("Start time: " + (Get-Date))
+
+   #Purges log files older than X days
+   $RetentionDate = (Get-Date).AddDays(-$LogRetentionDays)
+   Get-ChildItem -Path $LogDirectory -Recurse -Force | Where-Object { !$_.PSIsContainer -and $_.CreationTime -lt $RetentionDate -and $_.Name -like "*.log"} | Remove-Item -Force
 } 
-
 
 Function Send-Notice
 {
@@ -59,9 +84,6 @@ Function Send-Notice
     Notices are only sent if days before password is due to expire are equal to 1,2,3,7, or 14.
     
     .NOTES
-    Title: Send-Notice
-    Date Created : 2017-05-01   
-    Last Edit: 2017-12-29
     Author : Andrew Ellis
     GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
     #>
