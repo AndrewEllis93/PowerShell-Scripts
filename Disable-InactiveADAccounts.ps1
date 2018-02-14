@@ -469,15 +469,38 @@ Function Disable-InactiveADAccounts {
 
         #Form the paths for the output files
         $InactiveUsersDisabledCSV = $OutputDirectory + "\InactiveUsers-Disabled.csv"
-        $UsersNotDisabledCSV = $OutputDirectory + "\InactiveUsers-Excluded.csv"
+        $InactiveUsersExcludedCSV = $OutputDirectory + "\InactiveUsers-Excluded.csv"
 
         #Export the CSVs
         $InactiveUsersDisabled | Export-CSV $InactiveUsersDisabledCSV -NoTypeInformation -Force
-        $ExcludedInactiveUsers | Export-CSV $UsersNotDisabledCSV -NoTypeInformation -Force
+        If ($ExclusionGroups){
+            $ExcludedInactiveUsers | Export-CSV $InactiveUsersExcludedCSV -NoTypeInformation -Force
+        }
 
         #Send email with CSVs as attachments
         Write-Output "Sending email..."
-        Send-MailMessage -Attachments @($InactiveUsersDisabledCSV,$UsersNotDisabledCSV) -From $From -SmtpServer $SMTPServer -To $To -Subject $Subject
+        
+        If ($ExclusionGroups){
+            $ExclusionGroupsList = $ExclusionGroups -join ", "
+            $Body = @"
+Attached are two reports: 
+    - InactiveComputers-Disabled.csv: AD accounts that were disabled for inactivity ($DaysThreshold days).
+    - InactiveComputers-Excluded.csv: Inactive AD accounts that were excluded from disablement.
+
+Excluded AD group(s): $ExclusionGroupsList
+"@
+        } 
+        Else {
+            $Body = "Attached is a list of AD accounts that were disabled for inactivity ($DaysThreshold days)."
+
+        }
+
+        If ($ExclusionGroups){
+            Send-MailMessage -Attachments @($InactiveUsersDisabledCSV,$InactiveUsersExcludedCSV) -From $From -SmtpServer $SMTPServer -To $To -Subject $Subject -Body $Body
+        }
+        Else {
+            Send-MailMessage -Attachments @($InactiveUsersDisabledCSV) -From $From -SmtpServer $SMTPServer -To $To -Subject $Subject -Body $Body
+        }
 
         <#
         # This is here if you want to use it in conjunction with my Move-Disabled script. Just uncomment and replace with your scheduled task path. 

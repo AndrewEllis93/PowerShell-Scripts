@@ -142,7 +142,7 @@ Function Disable-InactiveADComputers {
         #Gets all AD computers with ExtensionAttribute3 set to an inactivity or disablement date and sets it to "RE-ENABLED ON "
         Write-Output ""
         Write-Output "RE-ENABLED ACCOUNT FLAGGING:"
-        Write-Output "Finding re-enabled computers..."
+        Write-Output "Finding unflagged re-enabled computers..."
 
         $ReEnabledComputers = Get-ADComputer -Filter * -Properties DistinguishedName,ExtensionAttribute3,SamAccountName,Enabled | Where-Object {
             $_.Enabled -eq $True -and
@@ -396,8 +396,6 @@ Function Disable-InactiveADComputers {
                 LastLogon=$TrueLastLogon
                 WhenCreated=$whenCreated
                 DaysInactive=$DaysInactive
-                GivenName=$ComputerEntries[0].GivenName
-                Surname=$ComputerEntries[0].SurName
                 Name=$ComputerEntries[0].Name
                 DistinguishedName=$ComputerEntries[0].DistinguishedName
                 Description=$ComputerEntries[0].Description
@@ -426,8 +424,8 @@ Function Disable-InactiveADComputers {
 
         #For some reason compare-object is not working properly without specifying all properties. Don't know why. 
         $ExcludedComputersResults = Compare-Object $FilteredComputersResults $FullResults `
-        -Property SamAccountName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description,ExtensionAttribute3 | 
-        Select-Object SamAccountName,enabled,lastlogon,whencreated,DaysInactive,givenname,surname,name,distinguishedname,Description,ExtensionAttribute3
+        -Property SamAccountName,enabled,lastlogon,whencreated,DaysInactive,name,distinguishedname,Description,ExtensionAttribute3 | 
+        Select-Object SamAccountName,enabled,lastlogon,whencreated,DaysInactive,name,distinguishedname,Description,ExtensionAttribute3
 
         #Add to ComputersDisabled array for CSV report. Also disable and stamp computers if ReportOnly is set to false (default).
         $InactiveComputersDisabled = @()
@@ -469,15 +467,38 @@ Function Disable-InactiveADComputers {
 
         #Form the paths for the output files
         $InactiveComputersDisabledCSV = $OutputDirectory + "\InactiveComputers-Disabled.csv"
-        $ComputersNotDisabledCSV = $OutputDirectory + "\InactiveComputers-Excluded.csv"
+        $InactiveComputersExcludedCSV = $OutputDirectory + "\InactiveComputers-Excluded.csv"
 
         #Export the CSVs
         $InactiveComputersDisabled | Export-CSV $InactiveComputersDisabledCSV -NoTypeInformation -Force
-        $ExcludedInactiveComputers | Export-CSV $ComputersNotDisabledCSV -NoTypeInformation -Force
+        If ($ExclusionGroups){
+            $ExcludedInactiveComputers | Export-CSV $InactiveComputersExcludedCSV -NoTypeInformation -Force
+        }
 
         #Send email with CSVs as attachments
         Write-Output "Sending email..."
-        Send-MailMessage -Attachments @($InactiveComputersDisabledCSV,$ComputersNotDisabledCSV) -From $From -SmtpServer $SMTPServer -To $To -Subject $Subject
+ 
+        If ($ExclusionGroups){
+            $ExclusionGroupsList = $ExclusionGroups -join ", "
+            $Body = @"
+Attached are two reports: 
+    - InactiveComputers-Disabled.csv: AD computers that were disabled for inactivity ($DaysThreshold days).
+    - InactiveComputers-Excluded.csv: Inactive AD computers that were excluded from disablement.
+
+Excluded AD group(s): $ExclusionGroupsList
+"@
+    } 
+        Else {
+            $Body = "Attached is a list of AD computers that were disabled for inactivity ($DaysThreshold days)."
+
+    }
+
+        If ($ExclusionGroups) {
+            Send-MailMessage -Attachments @($InactiveComputersDisabledCSV,$InactiveComputersExcludedCSV) -From $From -SmtpServer $SMTPServer -To $To -Subject $Subject -Body $Body
+        }
+        Else {
+            Send-MailMessage -Attachments @($InactiveComputersDisabledCSV) -From $From -SmtpServer $SMTPServer -To $To -Subject $Subject -Body $Body
+        }
 
         <#
         # This is here if you want to use it in conjunction with my Move-Disabled script. Just uncomment and replace with your scheduled task path. 
