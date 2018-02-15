@@ -379,7 +379,7 @@ Function Disable-InactiveADComputers {
             }
 
             #If the account was flagged as re-enabled, take that into consideration too.
-            If ($ComputerEntries.ExtensionAttribute3){
+            If ($ComputerEntries.ExtensionAttribute3 -like "RE-ENABLED ON*"){
                 $ReEnabledDate = [datetime](($ComputerEntries.ExtensionAttribute3 | Measure-Object -Maximum).Maximum -replace 'RE-ENABLED ON ', '')
                 If ($ReEnabledDate -gt $TrueLastLogon){
                     $TrueLastLogon = $ReEnabledDate
@@ -434,7 +434,7 @@ Function Disable-InactiveADComputers {
                 If ($_.DaysInactive -ge $DaysThreshold){
                     Write-Output ("Disabling " + $_.SamAccountName + "...")
                     Disable-ADAccount -Identity $_.SamAccountName
-                    $Date = "INACTIVE SINCE " + (Get-Date)
+                    $Date = "INACTIVE SINCE " + $TrueLastLogon
                     Set-ADComputer -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date}
                     $InactiveComputersDisabled += $_
                 }
@@ -445,7 +445,7 @@ Function Disable-InactiveADComputers {
                 If ($_.DaysInactive -ge $DaysThreshold){
                     Write-Output ("Disabling " + $_.SamAccountName + "...")
                     Disable-ADAccount -Identity $_.SamAccountName -WhatIf
-                    $Date = "INACTIVE SINCE " + (Get-Date)
+                    $Date = "INACTIVE SINCE " + $TrueLastLogon
                     Set-ADComputer -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf
                     $InactiveComputersDisabled += $_
                 }

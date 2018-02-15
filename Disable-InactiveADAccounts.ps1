@@ -379,7 +379,7 @@ Function Disable-InactiveADAccounts {
             }
 
             #If the account was flagged as re-enabled, take that into consideration too.
-            If ($UserEntries.ExtensionAttribute3){
+            If ($UserEntries.ExtensionAttribute3 -like "RE-ENABLED ON*"){
                 $ReEnabledDate = [datetime](($UserEntries.ExtensionAttribute3 | Measure-Object -Maximum).Maximum -replace 'RE-ENABLED ON ', '')
                 If ($ReEnabledDate -gt $TrueLastLogon){
                     $TrueLastLogon = $ReEnabledDate
@@ -436,7 +436,7 @@ Function Disable-InactiveADAccounts {
                 If ($_.DaysInactive -ge $DaysThreshold){
                     Write-Output ("Disabling " + $_.SamAccountName + "...")
                     Disable-ADAccount -Identity $_.SamAccountName
-                    $Date = "INACTIVE SINCE " + (Get-Date)
+                    $Date = "INACTIVE SINCE " + $TrueLastLogon
                     Set-ADUser -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date}
                     $InactiveUsersDisabled += $_
                 }
@@ -447,7 +447,7 @@ Function Disable-InactiveADAccounts {
                 If ($_.DaysInactive -ge $DaysThreshold){
                     Write-Output ("Disabling " + $_.SamAccountName + "...")
                     Disable-ADAccount -Identity $_.SamAccountName -WhatIf
-                    $Date = "INACTIVE SINCE " + (Get-Date)
+                    $Date = "INACTIVE SINCE " + $TrueLastLogon
                     Set-ADUser -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf
                     $InactiveUsersDisabled += $_
                 }
