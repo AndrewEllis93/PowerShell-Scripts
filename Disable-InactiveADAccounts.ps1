@@ -436,7 +436,7 @@ Function Disable-InactiveADAccounts {
                 If ($_.DaysInactive -ge $DaysThreshold){
                     Write-Output ("Disabling " + $_.SamAccountName + "...")
                     Disable-ADAccount -Identity $_.SamAccountName
-                    $Date = "INACTIVE SINCE " + $TrueLastLogon
+                    $Date = "INACTIVE SINCE " + $_.LastLogon
                     Set-ADUser -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date}
                     $InactiveUsersDisabled += $_
                 }
@@ -447,7 +447,7 @@ Function Disable-InactiveADAccounts {
                 If ($_.DaysInactive -ge $DaysThreshold){
                     Write-Output ("Disabling " + $_.SamAccountName + "...")
                     Disable-ADAccount -Identity $_.SamAccountName -WhatIf
-                    $Date = "INACTIVE SINCE " + $TrueLastLogon
+                    $Date = "INACTIVE SINCE " + $_.LastLogon
                     Set-ADUser -Identity $_.SamAccountName -Replace @{ExtensionAttribute3=$Date} -WhatIf
                     $InactiveUsersDisabled += $_
                 }
