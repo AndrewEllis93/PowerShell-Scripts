@@ -484,8 +484,8 @@ Function Disable-InactiveADAccounts {
             $ExclusionGroupsList = $ExclusionGroups -join ", "
             $Body = @"
 Attached are two reports: 
-    - InactiveComputers-Disabled.csv: AD accounts that were disabled for inactivity ($DaysThreshold days).
-    - InactiveComputers-Excluded.csv: Inactive AD accounts that were excluded from disablement.
+    - InactiveUsers-Disabled.csv: AD accounts that were disabled for inactivity ($DaysThreshold days).
+    - InactiveUsers-Excluded.csv: Inactive AD accounts that were excluded from disablement.
 
 Excluded AD group(s): $ExclusionGroupsList
 "@
