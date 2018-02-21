@@ -232,7 +232,7 @@ Function Move-Disabled {
                 #If auto-disabled because of inactivity (Disable-InactiveADAccounts script), add extra days to account for that.
                 ElseIf ($DisabledOUUser.ExtensionAttribute3 -like "INACTIVE SINCE*"){
                     $DateDisabled = [datetime]($DisabledOUUser.ExtensionAttribute3.Replace('INACTIVE SINCE ',''))
-                    $DaysDisabled = (New-TimeSpan -Start $DateDisabled.AddDays(($UserInactivityDays * -1)) -End (Get-Date)).Days
+                    $DaysDisabled = (New-TimeSpan -Start $DateDisabled.AddDays($UserInactivityDays) -End (Get-Date)).Days
                 }
                 Else {Write-Error ($DisabledOUUser.SamAccountName + " has an invalid disable date in ExtensionAttribute3.")}
 
@@ -294,7 +294,7 @@ Function Move-Disabled {
                 #If auto-disabled because of inactivity (Disable-InactiveADAccounts script), add extra days to account for that.
                 ElseIf ($DisabledOUComputer.ExtensionAttribute3 -like "INACTIVE SINCE*"){
                     $DateDisabled = [datetime]($DisabledOUComputer.ExtensionAttribute3.Replace('INACTIVE SINCE ',''))
-                    $DaysDisabled = (New-TimeSpan -Start $DateDisabled.AddDays(($ComputerInactivityDays * -1)) -End (Get-Date)).Days
+                    $DaysDisabled = (New-TimeSpan -Start $DateDisabled.AddDays($ComputerInactivityDays) -End (Get-Date)).Days
                 }
                 Else {Write-Error ($DisabledOUComputer.SamAccountName + " has an invalid disable date in ExtensionAttribute3.")}
 
