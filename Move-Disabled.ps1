@@ -2,7 +2,7 @@
 #
 # Title: Move-Disabled
 # Date Created : 2017-12-28
-# Last Edit: 2018-02-14
+# Last Edit: 2018-02-22
 # Author : Andrew Ellis
 # GitHub: https://github.com/AndrewEllis93/PowerShell-Scripts
 #
@@ -38,7 +38,7 @@ Function Move-Disabled {
     The InactivityDays argument is optional, but is there for if you are using my Disable-InactiveADAccounts script. This is so it can account for inactivity in its calculations. Please make sure you use the same on both.
 
     .EXAMPLE
-    Move-Disabled -ParentOU "OU=Disabled Objects,DC=domain,DC=local" -InactivityDays 30 -ExclusionUserGroups @('ServiceAccts') -ExclusionOUs @('OU=Test,DC=domain,DC=local','OU=Test2,DC=domain,DC=local') -ReportOnly
+    Move-Disabled -ParentOU "OU=Disabled Objects,DC=domain,DC=local" -InactivityDays 30 -ComputerInactivityDays 60 -ExclusionUserGroups @('ServiceAccts') -ExclusionOUs @('OU=Test,DC=domain,DC=local','OU=Test2,DC=domain,DC=local') -DeleteComputersAt180 -DeleteUsersAt180 -ReportOnly
 
     .LINK
     https://github.com/AndrewEllis93/PowerShell-Scripts
@@ -53,7 +53,9 @@ Function Move-Disabled {
         [switch]$ReportOnly = $False,
         [int]$UserInactivityDays = 30,
         [int]$ComputerInactivityDays = 30,
-        [array]$ExclusionOUs
+        [array]$ExclusionOUs,
+        [switch]$DeleteComputersAt180= $False,
+        [switch]$DeleteUsersAt180= $False
     )
 
     #DECLARATIONS
@@ -204,6 +206,7 @@ Function Move-Disabled {
             #Declares counts for output.
             $30to180DayMovedUsers = 0
             $180DayMovedUsers = 0
+            $180DayDeletedUsers = 0
 
             #Loops through users and checks if older than 30 days.
             ForEach ($DisabledOUUser in $DisabledOUUsers){
@@ -248,15 +251,29 @@ Function Move-Disabled {
                     $30to180DayMovedUsers++
                 }
                 Else {
-                    If ($DaysDisabled -gt 180 -and $DisabledOUUser.DistinguishedName -notlike "*OU=Over 180 Days,OU=Users,$ParentOU"){
-                        Write-Output ("Moving user to the Over 180 Days OU: " + $DisabledOUUser.SamAccountName)
-                        If ($ReportOnly) {
-                            Move-ADObject -Identity $DisabledOUUser.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Users,$ParentOU" -WhatIf
+                    If (!$DeleteUsersAt180){
+                        If ($DaysDisabled -gt 180 -and $DisabledOUUser.DistinguishedName -notlike "*OU=Over 180 Days,OU=Users,$ParentOU"){
+                            Write-Output ("Moving user to the Over 180 Days OU: " + $DisabledOUUser.SamAccountName)
+                            If ($ReportOnly) {
+                                Move-ADObject -Identity $DisabledOUUser.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Users,$ParentOU" -WhatIf
+                            }
+                            Else {
+                                Move-ADObject -Identity $DisabledOUUser.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Users,$ParentOU"
+                            }
+                            $180DayMovedUsers++
                         }
-                        Else {
-                            Move-ADObject -Identity $DisabledOUUser.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Users,$ParentOU"
+                    }
+                    Else {
+                        If ($DaysDisabled -gt 180){
+                            Write-Output ("Deleting >180 day inactive user: " + $DisabledOUUser.SamAccountName)
+                            If ($ReportOnly) {
+                                Remove-ADObject $DisabledOUUser.DistinguishedName -WhatIf
+                            }
+                            Else {
+                                Remove-ADObject $DisabledOUUser.DistinguishedName -Recursive -Confirm:$False
+                            }
+                            $180DayDeletedUsers++
                         }
-                        $180DayMovedUsers++
                     }
                 }
             }
@@ -265,6 +282,7 @@ Function Move-Disabled {
             #Declares counts for output.
             $30to180DayMovedComputers = 0
             $180DayMovedComputers = 0
+            $180DayDeletedComputers = 0
 
 
             #Loops through computers and checks if older than 90 days.
@@ -310,18 +328,32 @@ Function Move-Disabled {
                     $30to180DayMovedComputers++
                 }
                 Else{
-                    If ($DaysDisabled -gt 180 -and $DisabledOUComputer.DistinguishedName -notlike "*OU=Over 180 Days,OU=Computers,$ParentOU"){
-                        Write-Output ("Moving computer to the Over 180 Days OU: " + $DisabledOUComputer.SamAccountName)
-                        If ($ReportOnly) {
-                            Move-ADObject -Identity $DisabledOUComputer.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Computers,$ParentOU" -WhatIf
+                    If (!$DeleteComputersAt180){
+                        If ($DaysDisabled -gt 180 -and $DisabledOUComputer.DistinguishedName -notlike "*OU=Over 180 Days,OU=Computers,$ParentOU"){
+                            Write-Output ("Moving computer to the Over 180 Days OU: " + $DisabledOUComputer.SamAccountName)
+                            If ($ReportOnly) {
+                                Move-ADObject -Identity $DisabledOUComputer.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Computers,$ParentOU" -WhatIf
+                            }
+                            Else {
+                                Move-ADObject -Identity $DisabledOUComputer.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Computers,$ParentOU"
+                            }
+                            $180DayMovedComputers++
                         }
-                        Else {
-                            Move-ADObject -Identity $DisabledOUComputer.DistinguishedName -TargetPath "OU=Over 180 Days,OU=Computers,$ParentOU"
+                    }
+                    Else {
+                        If ($DaysDisabled -gt 180){
+                            Write-Output ("Deleting >180 day inactive computer: " + $DisabledOUcomputer.SamAccountName)
+                            If ($ReportOnly) {
+                                Remove-ADObject $DisabledOUcomputer.DistinguishedName -WhatIf
+                            }
+                            Else {
+                                Remove-ADObject $DisabledOUcomputer.DistinguishedName -Recursive -Confirm:$False
+                            }
+                            $180DayDeletedcomputers++
                         }
-                        $180DayMovedComputers++
+                    }
                 }
             }
-        }
 
     #SUMMARY OUTPUT
         #Writes the counts of what was modified etc.
@@ -336,10 +368,22 @@ Function Move-Disabled {
         $30to180DayMovedComputers = $30to180DayMovedComputers.tostring()
         Write-Output ($30to180DayMovedComputers + ' computer(s) moved to the "30-180 Days" OU.')
         Write-Output ''
-        $180DayMovedUsers = $180DayMovedUsers.tostring()
-        Write-Output ($180DayMovedUsers + ' user(s) moved to the "Over 180 Days" OU.')
-        $180DayMovedComputers = $180DayMovedComputers.tostring()
-        Write-Output ($180DayMovedComputers + ' computer(s) moved to the "Over 180 Days" OU.')
+        If (!$DeleteUsersAt180){
+            $180DayMovedUsers = $180DayMovedUsers.tostring()
+            Write-Output ($180DayMovedUsers + ' user(s) moved to the "Over 180 Days" OU.')
+        }
+        Else {
+            $180DayDeletedUsers = $180DayDeletedUsers.tostring()
+            Write-Output ($180DayDeletedUsers + ' user(s) were DELETED for >180 days of inactivity.')
+        }
+        If (!$DeleteComputersAt180){
+            $180DayMovedComputers = $180DayMovedComputers.tostring()
+            Write-Output ($180DayMovedComputers + ' computer(s) moved to the "Over 180 Days" OU.')
+        }
+        Else {
+            $180DayDeletedComputers = $180DayDeletedComputers.tostring()
+            Write-Output ($180DayDeletedComputers + ' computer(s) were DELETED for >180 days of inactivity.')
+        }
         Write-Output ''
 
         #ATTRIBUTE CLEANUP
